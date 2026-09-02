@@ -20,7 +20,7 @@ use hardware::HardwareProfile;
 use focus::FocusTracker;
 use config::AppConfig;
 use i18n::I18nEngine;
-use editor::{AnnotationShape, AnnotationStack, EditorEngine};
+use editor::{AnnotationShape, AnnotationStack, EditorEngine, parse_color_hex, stroke_size_to_px};
 use hotkeys::{HotkeyCommand, HotkeyDaemon};
 
 slint::include_modules!();
@@ -277,24 +277,72 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_show_editor_modal(true);
     });
 
-    // Interactive Canvas Annotation Drag Handler
+    // Unified Annotation Dispatch Handler — routes all 8 tool types
     let base_img_clone = active_base_image.clone();
     let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
-    ui.on_apply_blur_region(move |x, y, w, h| {
+    ui.on_apply_annotation(move |tool, color_hex, stroke_idx, x1, y1, x2, y2| {
         let ui = ui_handle.unwrap();
-        let redaction_shape = AnnotationShape::RedactBox {
-            x,
-            y,
-            width: w as u32,
-            height: h as u32,
+        let color = parse_color_hex(color_hex.as_str());
+        let stroke_px = stroke_size_to_px(stroke_idx);
+
+        // Normalize coordinates so x1/y1 is always top-left
+        let (lx, ly, rx, ry) = (
+            x1.min(x2), y1.min(y2),
+            x1.max(x2), y1.max(y2),
+        );
+        let w = (rx - lx).max(0) as u32;
+        let h = (ry - ly).max(0) as u32;
+
+        let shape = match tool.as_str() {
+            "arrow" => AnnotationShape::Arrow {
+                start: (x1 as f32, y1 as f32),
+                end: (x2 as f32, y2 as f32),
+                color,
+                stroke: stroke_px,
+            },
+            "rect" => AnnotationShape::HighlightBox {
+                x: lx, y: ly, width: w, height: h,
+                color, stroke: stroke_px,
+            },
+            "oval" => AnnotationShape::Oval {
+                x: lx, y: ly, width: w, height: h,
+                color, stroke: stroke_px,
+            },
+            "blur" => AnnotationShape::RedactBox {
+                x: lx, y: ly, width: w, height: h,
+            },
+            "text" => AnnotationShape::TextCallout {
+                x: x1, y: y1,
+                text: "Label".to_string(),
+                color,
+            },
+            "step" => {
+                let step_num = stack_clone.lock().unwrap().next_step();
+                AnnotationShape::StepNumber {
+                    x: x1, y: y1,
+                    num: step_num,
+                    color,
+                }
+            },
+            "pen" => AnnotationShape::Freehand {
+                start: (x1 as f32, y1 as f32),
+                end: (x2 as f32, y2 as f32),
+                color,
+                stroke: stroke_px,
+            },
+            "spotlight" => AnnotationShape::Spotlight {
+                x: lx, y: ly, width: w, height: h,
+            },
+            _ => return, // unknown tool — skip
         };
-        stack_clone.lock().unwrap().push(redaction_shape);
+
+        stack_clone.lock().unwrap().push(shape);
 
         if let Some(base) = base_img_clone.lock().unwrap().as_ref() {
             let rendered = stack_clone.lock().unwrap().render_shapes(base);
-            let updated_slint_img = EditorEngine::rgba_to_slint_image(&rendered);
-            ui.set_canvas_image(updated_slint_img);
+            let slint_img = EditorEngine::rgba_to_slint_image(&rendered);
+            ui.set_canvas_image(slint_img);
         }
     });
 

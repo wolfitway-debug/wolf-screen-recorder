@@ -2,35 +2,35 @@ import { SettingsModal } from "settings.slint";
 import { StudioEditor } from "editor.slint";
 
 export component AppWindow inherits Window {
-    width: root.show-settings-modal ? 700px : (root.show-editor-modal ? 860px : 780px);
-    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 580px : 116px);
+    width: root.show-settings-modal ? 700px : (root.show-editor-modal ? 900px : 800px);
+    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 600px : 60px);
     no-frame: true;
     background: transparent;
     always-on-top: true;
 
     // Core Properties
-    in-out property <string> primary-mode: "image"; // "image" or "video"
+    in-out property <string> primary-mode: "image";
     in-out property <bool> is-recording: false;
     in-out property <string> selected-mode: "desktop";
     in-out property <string> resolution: "1080p";
     in-out property <bool> audio-enabled: false;
     in-out property <bool> webcam-enabled: false;
-    
-    // Hardware & Bilingual Localization State
+
+    // State
     in-out property <string> lang: "en";
-    in-out property <string> hw-encoder-tag: "[HW-AUTO]";
+    in-out property <string> hw-encoder-tag: "[SW x264]";
     in-out property <string> status-message: "Ready";
 
-    // Canvas Image Properties
+    // Canvas
     in-out property <image> canvas-image;
     in-out property <bool> has-canvas-image: false;
 
-    // Modal Display Controls
+    // Modal Controls
     in-out property <bool> show-settings-modal: false;
     in-out property <bool> show-editor-modal: false;
     in-out property <bool> show-support-modal: false;
-    
-    // Config Properties
+
+    // Config
     in-out property <string> active-encoder: "Auto";
     in-out property <string> save-path: "/home/user/Videos";
     in-out property <string> watermark-text: "WOLFITWAY";
@@ -55,27 +55,28 @@ export component AppWindow inherits Window {
     callback copy-clipboard();
     callback undo-annotation();
     callback clear-annotations();
-    callback apply-blur-region(int, int, int, int);
+    callback apply-annotation(string, string, int, int, int, int, int);
     callback save-editor-export();
     callback open-paddle-checkout();
     callback move-window(length, length);
 
-    // Main Floating Obsidian Card View
+    // ── ROOT CARD ─────────────────────────────────────────────────────────────
     Rectangle {
         width: 100%;
         height: 100%;
         background: #080c14;
-        border-radius: 20px;
+        border-radius: root.show-settings-modal || root.show-editor-modal ? 20px : 16px;
         border-width: 1.5px;
-        border-color: root.is-recording ? #ef4444 : #22d45e40;
-        drop-shadow-blur: 32px;
-        drop-shadow-color: root.is-recording ? #ef444450 : #22d45e25;
+        border-color: root.is-recording ? #ef444470 : #22d45e22;
+        drop-shadow-blur: 28px;
+        drop-shadow-color: root.is-recording ? #ef444440 : #22d45e18;
+        animate border-color { duration: 200ms; }
+        animate drop-shadow-color { duration: 200ms; }
 
-        // Window Dragging Handle
+        // Drag handle
         TouchArea {
             property <length> start-x;
             property <length> start-y;
-            
             pointer-event(event) => {
                 if (event.button == PointerEventButton.left) {
                     if (event.kind == PointerEventKind.down) {
@@ -84,22 +85,38 @@ export component AppWindow inherits Window {
                     }
                 }
             }
-            moved => {
-                root.move-window(self.mouse-x - self.start-x, self.mouse-y - self.start-y);
-            }
+            moved => { root.move-window(self.mouse-x - self.start-x, self.mouse-y - self.start-y); }
         }
 
-        // View 1: Main Floating Recorder Toolbar
-        if (!root.show-settings-modal && !root.show-editor-modal) : VerticalLayout {
-            padding: 10px;
+        // ── VIEW 1: MINIMAL SINGLE-ROW TOOLBAR ────────────────────────────────
+        if (!root.show-settings-modal && !root.show-editor-modal) : HorizontalLayout {
+            padding-left: 10px;
+            padding-right: 10px;
             spacing: 8px;
+            alignment: space-between;
 
-            // Row 1: Top Brand & Primary Mode Switcher Bar
+            // ── LEFT: Brand Icon + Mode Toggle Pill ─────────────────────────
             HorizontalLayout {
-                spacing: 10px;
-                alignment: space-between;
+                spacing: 8px;
+                alignment: center;
 
-                // Logo Brand Badge
+                // Wolf brand mark
+                Rectangle {
+                    width: 36px; height: 36px;
+                    background: #0f1623;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #22d45e30;
+
+                    Text {
+                        text: "🐺";
+                        font-size: 18px;
+                        x: (parent.width - self.width)/2;
+                        y: (parent.height - self.height)/2;
+                    }
+                }
+
+                // Mode Segmented Toggle (📷 / 🎬)
                 Rectangle {
                     height: 36px;
                     background: #0f1623;
@@ -108,305 +125,229 @@ export component AppWindow inherits Window {
                     border-color: #1e293b;
 
                     HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        spacing: 6px;
-                        alignment: center;
+                        padding: 3px; spacing: 2px;
 
-                        Text {
-                            text: "🐺 WOLFCAP";
-                            font-size: 11px;
-                            font-weight: 900;
-                            color: #22d45e;
-                            vertical-alignment: center;
-                        }
-
-                        Rectangle {
-                            height: 18px;
-                            background: #161e2e;
-                            border-radius: 5px;
-
-                            HorizontalLayout {
-                                padding-left: 6px;
-                                padding-right: 6px;
-                                alignment: center;
-
-                                Text {
-                                    text: root.hw-encoder-tag;
-                                    font-size: 9px;
-                                    font-weight: 800;
-                                    color: #38bdf8;
-                                    vertical-alignment: center;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Primary Segmented Mode Control ([📷 SNAPSHOT] | [📹 RECORD])
-                Rectangle {
-                    height: 36px;
-                    background: #0f1623;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: #1e293b;
-
-                    HorizontalLayout {
-                        padding: 3px;
-                        spacing: 3px;
-
-                        // Image Snap Tab
-                        img_tab := Rectangle {
-                            height: 30px;
-                            background: root.primary-mode == "image" ? #22d45e : (img_touch.has-hover ? #161e2e : transparent);
-                            border-radius: 7px;
+                        img_mode := Rectangle {
+                            width: 34px; height: 30px;
+                            background: root.primary-mode == "image" ? #22d45e : (img_mt.has-hover ? #161e2e : transparent);
+                            border-radius: 8px;
                             animate background { duration: 100ms; }
-
-                            HorizontalLayout {
-                                padding-left: 12px;
-                                padding-right: 12px;
-                                alignment: center;
-
-                                Text {
-                                    text: "📷 SNAPSHOT";
-                                    font-size: 10px;
-                                    font-weight: 900;
-                                    color: root.primary-mode == "image" ? #000000 : #94a3b8;
-                                    vertical-alignment: center;
-                                }
+                            Text {
+                                text: "📷";
+                                font-size: 14px;
+                                x: (parent.width - self.width)/2;
+                                y: (parent.height - self.height)/2;
                             }
-                            img_touch := TouchArea { clicked => { root.select-primary-mode("image"); } }
+                            img_mt := TouchArea { clicked => { root.select-primary-mode("image"); } }
                         }
 
-                        // Video Rec Tab
-                        vid_tab := Rectangle {
-                            height: 30px;
-                            background: root.primary-mode == "video" ? #22d45e : (vid_touch.has-hover ? #161e2e : transparent);
-                            border-radius: 7px;
+                        vid_mode := Rectangle {
+                            width: 34px; height: 30px;
+                            background: root.primary-mode == "video" ? #22d45e : (vid_mt.has-hover ? #161e2e : transparent);
+                            border-radius: 8px;
                             animate background { duration: 100ms; }
-
-                            HorizontalLayout {
-                                padding-left: 12px;
-                                padding-right: 12px;
-                                alignment: center;
-
-                                Text {
-                                    text: "📹 RECORD";
-                                    font-size: 10px;
-                                    font-weight: 900;
-                                    color: root.primary-mode == "video" ? #000000 : #94a3b8;
-                                    vertical-alignment: center;
-                                }
+                            Text {
+                                text: "🎬";
+                                font-size: 14px;
+                                x: (parent.width - self.width)/2;
+                                y: (parent.height - self.height)/2;
                             }
-                            vid_touch := TouchArea { clicked => { root.select-primary-mode("video"); } }
+                            vid_mt := TouchArea { clicked => { root.select-primary-mode("video"); } }
                         }
-                    }
-                }
-
-                // Quick Language & Preferences Buttons
-                HorizontalLayout {
-                    spacing: 6px;
-
-                    // Language Switch Pill
-                    lang_pill := Rectangle {
-                        width: 48px;
-                        height: 36px;
-                        background: lang_touch.has-hover ? #1e293b : #0f1623;
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: #3b82f6;
-                        animate background { duration: 100ms; }
-
-                        Text {
-                            text: root.lang == "ro" ? "🇷🇴 RO" : (root.lang == "es" ? "🇪🇸 ES" : (root.lang == "de" ? "🇩🇪 DE" : (root.lang == "fr" ? "🇫🇷 FR" : (root.lang == "ja" ? "🇯🇵 JA" : "🇬🇧 EN"))));
-                            font-size: 10px;
-                            font-weight: 900;
-                            color: #38bdf8;
-                            x: (parent.width - self.width)/2;
-                            y: (parent.height - self.height)/2;
-                        }
-                        lang_touch := TouchArea { clicked => { root.toggle-language(); } }
-                    }
-
-                    // Preferences Gear Button
-                    set_btn := Rectangle {
-                        width: 38px;
-                        height: 36px;
-                        background: set_touch.has-hover ? #1e293b : #0f1623;
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: #1e293b;
-                        animate background { duration: 100ms; }
-
-                        Text {
-                            text: "⚙";
-                            font-size: 14px;
-                            color: #cbd5e1;
-                            x: (parent.width - self.width)/2;
-                            y: (parent.height - self.height)/2;
-                        }
-                        set_touch := TouchArea { clicked => { root.show-settings-modal = true; } }
                     }
                 }
             }
 
-            // Row 2: Mode-Specific Action Controls Bar
-            HorizontalLayout {
-                spacing: 10px;
-                alignment: space-between;
+            // ── CENTER: Capture Target Selector ─────────────────────────────
+            Rectangle {
+                height: 36px;
+                background: #0f1623;
+                border-radius: 10px;
+                border-width: 1px;
+                border-color: #1e293b;
 
-                // Screen Capture Target Mode Selector (Full Desktop / Window / Region)
-                Rectangle {
-                    height: 36px;
-                    background: #0f1623;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: #1e293b;
+                HorizontalLayout {
+                    padding: 3px; spacing: 2px;
 
-                    HorizontalLayout {
-                        padding: 3px;
-                        spacing: 3px;
-
-                        Rectangle {
-                            width: 58px; height: 30px;
-                            background: root.selected-mode == "desktop" ? #22d45e : (m_desk.has-hover ? #161e2e : transparent);
-                            border-radius: 7px;
-                            animate background { duration: 100ms; }
+                    tgt_desk := Rectangle {
+                        height: 30px;
+                        background: root.selected-mode == "desktop" ? #22d45e : (td_t.has-hover ? #161e2e : transparent);
+                        border-radius: 8px;
+                        animate background { duration: 100ms; }
+                        HorizontalLayout {
+                            padding-left: 10px; padding-right: 10px; alignment: center;
                             Text {
-                                text: "Desktop";
-                                font-size: 9px; font-weight: 800;
+                                text: "⊡ Desktop";
+                                font-size: 10px; font-weight: 800;
                                 color: root.selected-mode == "desktop" ? #000000 : #94a3b8;
-                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                                vertical-alignment: center;
                             }
-                            m_desk := TouchArea { clicked => { root.select-mode("desktop"); } }
                         }
+                        td_t := TouchArea { clicked => { root.select-mode("desktop"); } }
+                    }
 
-                        Rectangle {
-                            width: 58px; height: 30px;
-                            background: root.selected-mode == "window" ? #22d45e : (m_win.has-hover ? #161e2e : transparent);
-                            border-radius: 7px;
-                            animate background { duration: 100ms; }
+                    Rectangle { width: 1px; height: 20px; background: #1e293b; y: (parent.height - self.height)/2; }
+
+                    tgt_win := Rectangle {
+                        height: 30px;
+                        background: root.selected-mode == "window" ? #22d45e : (tw_t.has-hover ? #161e2e : transparent);
+                        border-radius: 8px;
+                        animate background { duration: 100ms; }
+                        HorizontalLayout {
+                            padding-left: 10px; padding-right: 10px; alignment: center;
                             Text {
-                                text: "Window";
-                                font-size: 9px; font-weight: 800;
+                                text: "⊞ Window";
+                                font-size: 10px; font-weight: 800;
                                 color: root.selected-mode == "window" ? #000000 : #94a3b8;
-                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                                vertical-alignment: center;
                             }
-                            m_win := TouchArea { clicked => { root.select-mode("window"); } }
                         }
+                        tw_t := TouchArea { clicked => { root.select-mode("window"); } }
+                    }
 
-                        Rectangle {
-                            width: 58px; height: 30px;
-                            background: root.selected-mode == "region" ? #22d45e : (m_reg.has-hover ? #161e2e : transparent);
-                            border-radius: 7px;
-                            animate background { duration: 100ms; }
+                    Rectangle { width: 1px; height: 20px; background: #1e293b; y: (parent.height - self.height)/2; }
+
+                    tgt_reg := Rectangle {
+                        height: 30px;
+                        background: root.selected-mode == "region" ? #22d45e : (tr_t.has-hover ? #161e2e : transparent);
+                        border-radius: 8px;
+                        animate background { duration: 100ms; }
+                        HorizontalLayout {
+                            padding-left: 10px; padding-right: 10px; alignment: center;
                             Text {
-                                text: "Region";
-                                font-size: 9px; font-weight: 800;
+                                text: "⊠ Region";
+                                font-size: 10px; font-weight: 800;
                                 color: root.selected-mode == "region" ? #000000 : #94a3b8;
-                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                                vertical-alignment: center;
                             }
-                            m_reg := TouchArea { clicked => { root.select-mode("region"); } }
                         }
+                        tr_t := TouchArea { clicked => { root.select-mode("region"); } }
+                    }
+                }
+            }
+
+            // ── RIGHT: Secondary Icons + Primary CTA ────────────────────────
+            HorizontalLayout {
+                spacing: 6px;
+                alignment: center;
+
+                // Image mode: Open file + Studio buttons
+                if (root.primary-mode == "image") : HorizontalLayout {
+                    spacing: 6px;
+
+                    open_icon := Rectangle {
+                        width: 36px; height: 36px;
+                        background: open_i_t.has-hover ? #1e293b : #0f1623;
+                        border-radius: 10px;
+                        border-width: 1px; border-color: #38bdf8;
+                        animate background { duration: 100ms; }
+                        Text { text: "📂"; font-size: 16px; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                        open_i_t := TouchArea { clicked => { root.open-file-dialog(); } }
+                    }
+
+                    studio_icon := Rectangle {
+                        width: 36px; height: 36px;
+                        background: studio_i_t.has-hover ? #1e293b : #0f1623;
+                        border-radius: 10px;
+                        border-width: 1px; border-color: #22d45e;
+                        animate background { duration: 100ms; }
+                        Text { text: "✏️"; font-size: 16px; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                        studio_i_t := TouchArea { clicked => { root.open-studio-editor(); } }
                     }
                 }
 
-                // Video Mode Audio/Webcam Toggles
+                // Video mode: Mic + Cam icon toggles
                 if (root.primary-mode == "video") : HorizontalLayout {
                     spacing: 6px;
 
-                    mic_btn := Rectangle {
-                        width: 58px; height: 36px;
-                        background: root.audio-enabled ? #161e2e : (mic_touch.has-hover ? #1e293b : #0f1623);
+                    mic_icon := Rectangle {
+                        width: 36px; height: 36px;
+                        background: root.audio-enabled ? #161e2e : (mic_i_t.has-hover ? #1e293b : #0f1623);
                         border-radius: 10px;
                         border-width: 1px;
                         border-color: root.audio-enabled ? #22d45e : #1e293b;
                         animate background { duration: 100ms; }
-
                         Text {
-                            text: root.audio-enabled ? "🎤 MIC ON" : "🎤 MIC OFF";
-                            font-size: 9px; font-weight: 800;
-                            color: root.audio-enabled ? #22d45e : #64748b;
+                            text: root.audio-enabled ? "🎤" : "🔇";
+                            font-size: 16px;
                             x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
                         }
-                        mic_touch := TouchArea { clicked => { root.toggle-audio(); } }
+                        mic_i_t := TouchArea { clicked => { root.toggle-audio(); } }
                     }
 
-                    cam_btn := Rectangle {
-                        width: 58px; height: 36px;
-                        background: root.webcam-enabled ? #161e2e : (cam_touch.has-hover ? #1e293b : #0f1623);
+                    cam_icon := Rectangle {
+                        width: 36px; height: 36px;
+                        background: root.webcam-enabled ? #161e2e : (cam_i_t.has-hover ? #1e293b : #0f1623);
                         border-radius: 10px;
                         border-width: 1px;
                         border-color: root.webcam-enabled ? #22d45e : #1e293b;
                         animate background { duration: 100ms; }
-
                         Text {
-                            text: root.webcam-enabled ? "📹 CAM ON" : "📹 CAM OFF";
-                            font-size: 9px; font-weight: 800;
-                            color: root.webcam-enabled ? #22d45e : #64748b;
+                            text: root.webcam-enabled ? "📸" : "📷";
+                            font-size: 16px;
                             x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
                         }
-                        cam_touch := TouchArea { clicked => { root.toggle-webcam(); } }
+                        cam_i_t := TouchArea { clicked => { root.toggle-webcam(); } }
                     }
                 }
 
-                // Image Mode Open File & Studio Editor Buttons
-                if (root.primary-mode == "image") : HorizontalLayout {
-                    spacing: 6px;
+                // Thin divider
+                Rectangle { width: 1px; height: 24px; background: #1e293b; y: (parent.height - self.height)/2; }
 
-                    open_btn := Rectangle {
-                        height: 36px;
-                        background: open_touch.has-hover ? #1e293b : #0f1623;
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: #3b82f6;
-                        animate background { duration: 100ms; }
-
-                        HorizontalLayout {
-                            padding-left: 10px; padding-right: 10px; alignment: center;
-                            Text { text: "📂 OPEN"; font-size: 9px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
-                        }
-                        open_touch := TouchArea { clicked => { root.open-file-dialog(); } }
+                // Lang toggle icon
+                lang_icon := Rectangle {
+                    width: 40px; height: 36px;
+                    background: lang_i_t.has-hover ? #1e293b : #0f1623;
+                    border-radius: 10px;
+                    border-width: 1px; border-color: #334155;
+                    animate background { duration: 100ms; }
+                    Text {
+                        text: root.lang == "ro" ? "🇷🇴" : (root.lang == "es" ? "🇪🇸" : (root.lang == "de" ? "🇩🇪" : (root.lang == "fr" ? "🇫🇷" : (root.lang == "ja" ? "🇯🇵" : "🇬🇧"))));
+                        font-size: 16px;
+                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
                     }
-
-                    studio_btn := Rectangle {
-                        height: 36px;
-                        background: studio_touch.has-hover ? #1e293b : #0f1623;
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: #22d45e;
-                        animate background { duration: 100ms; }
-
-                        HorizontalLayout {
-                            padding-left: 10px; padding-right: 10px; alignment: center;
-                            Text { text: "🎨 STUDIO"; font-size: 9px; font-weight: 900; color: #22d45e; vertical-alignment: center; }
-                        }
-                        studio_touch := TouchArea { clicked => { root.open-studio-editor(); } }
-                    }
+                    lang_i_t := TouchArea { clicked => { root.toggle-language(); } }
                 }
 
-                // Primary Hero CTA Button
+                // Settings gear icon
+                settings_icon := Rectangle {
+                    width: 36px; height: 36px;
+                    background: settings_i_t.has-hover ? #1e293b : #0f1623;
+                    border-radius: 10px;
+                    border-width: 1px; border-color: #334155;
+                    animate background { duration: 100ms; }
+                    Text { text: "⚙"; font-size: 16px; color: #64748b; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                    settings_i_t := TouchArea { clicked => { root.show-settings-modal = true; } }
+                }
+
+                // ── PRIMARY HERO CTA ──────────────────────────────────────
                 if (root.primary-mode == "image") : snap_cta := Rectangle {
-                    width: 150px; height: 36px;
-                    background: snap_touch.has-hover ? #16a34a : #22d45e;
+                    height: 36px;
+                    background: snap_cta_t.has-hover ? #16a34a : #22d45e;
                     border-radius: 10px;
                     animate background { duration: 100ms; }
 
                     HorizontalLayout {
-                        padding-left: 12px; padding-right: 12px; alignment: center;
-                        Text { text: "📸 SNAP IMAGE"; font-size: 11px; font-weight: 900; color: #000000; vertical-alignment: center; }
+                        padding-left: 14px; padding-right: 14px;
+                        spacing: 6px; alignment: center;
+                        Text { text: "📸"; font-size: 14px; vertical-alignment: center; }
+                        Text { text: "Snapshot"; font-size: 11px; font-weight: 900; color: #000000; vertical-alignment: center; }
                     }
-                    snap_touch := TouchArea { clicked => { root.take-snapshot(); } }
+                    snap_cta_t := TouchArea { clicked => { root.take-snapshot(); } }
                 }
 
                 if (root.primary-mode == "video") : rec_cta := Rectangle {
-                    width: 150px; height: 36px;
-                    background: root.is-recording ? (rec_touch.has-hover ? #dc2626 : #ef4444) : (rec_touch.has-hover ? #16a34a : #22d45e);
+                    height: 36px;
+                    background: root.is-recording
+                        ? (rec_cta_t.has-hover ? #dc2626 : #ef4444)
+                        : (rec_cta_t.has-hover ? #16a34a : #22d45e);
                     border-radius: 10px;
                     animate background { duration: 100ms; }
 
                     HorizontalLayout {
-                        alignment: center; spacing: 6px;
+                        padding-left: 14px; padding-right: 14px;
+                        spacing: 6px; alignment: center;
+                        // Recording dot indicator
                         Rectangle {
                             width: 8px; height: 8px;
                             background: root.is-recording ? #ffffff : #000000;
@@ -414,71 +355,46 @@ export component AppWindow inherits Window {
                             y: (parent.height - self.height)/2;
                         }
                         Text {
-                            text: root.is-recording ? "STOP RECORDING" : "🔴 START RECORD";
-                            font-size: 10px; font-weight: 900;
+                            text: root.is-recording ? "Stop" : "Record";
+                            font-size: 11px; font-weight: 900;
                             color: root.is-recording ? #ffffff : #000000;
                             vertical-alignment: center;
                         }
                     }
-                    rec_touch := TouchArea { clicked => { root.toggle-recording(); } }
-                }
-            }
-
-            // Row 3: Status & Dev Support Footer
-            HorizontalLayout {
-                padding-left: 4px; padding-right: 4px;
-                alignment: space-between;
-
-                HorizontalLayout {
-                    spacing: 6px; alignment: center;
-                    Rectangle {
-                        width: 6px; height: 6px;
-                        background: root.is-recording ? #ef4444 : #22d45e;
-                        border-radius: 3px;
-                        y: (parent.height - self.height)/2;
-                    }
-                    Text {
-                        text: "STATUS: " + root.status-message;
-                        font-size: 9px; font-weight: 700; color: #94a3b8;
-                        vertical-alignment: center;
-                    }
-                }
-
-                supp_btn := Rectangle {
-                    height: 22px;
-                    background: supp_touch.has-hover ? #4f46e5 : #6366f1;
-                    border-radius: 6px;
-                    animate background { duration: 100ms; }
-
-                    HorizontalLayout {
-                        padding-left: 8px; padding-right: 8px; alignment: center;
-                        Text { text: "💖 SUPPORT DEV"; font-size: 8px; font-weight: 800; color: #ffffff; vertical-alignment: center; }
-                    }
-                    supp_touch := TouchArea { clicked => { root.show-support-modal = true; } }
+                    rec_cta_t := TouchArea { clicked => { root.toggle-recording(); } }
                 }
             }
         }
 
-        // View 2: Dedicated Full Preferences Modal View
+        // ── VIEW 2: SETTINGS PANEL ────────────────────────────────────────────
         if (root.show-settings-modal) : SettingsModal {
             width: 100%; height: 100%;
-            active-lang: root.lang; active-encoder: root.active-encoder; save-path: root.save-path; watermark-text: root.watermark-text; auto-watermark: root.watermark-enabled; cinematic-zoom: root.cinematic-zoom-enabled;
+            active-lang: root.lang;
+            active-encoder: root.active-encoder;
+            save-path: root.save-path;
+            watermark-text: root.watermark-text;
+            auto-watermark: root.watermark-enabled;
+            cinematic-zoom: root.cinematic-zoom-enabled;
             close-settings => { root.show-settings-modal = false; }
             select-language(l) => { root.select-language(l); }
             select-encoder(e) => { root.select-encoder(e); }
             save-settings => { root.save-config(); }
         }
 
-        // View 3: Dedicated Full Studio Editor View
+        // ── VIEW 3: STUDIO EDITOR ─────────────────────────────────────────────
         if (root.show-editor-modal) : StudioEditor {
             width: 100%; height: 100%;
-            canvas-image: root.canvas-image; has-canvas-image: root.has-canvas-image; watermark-active: root.watermark-enabled;
+            canvas-image: root.canvas-image;
+            has-canvas-image: root.has-canvas-image;
+            watermark-active: root.watermark-enabled;
             close-editor => { root.show-editor-modal = false; }
             open-file-dialog => { root.open-file-dialog(); }
             copy-clipboard => { root.copy-clipboard(); }
             undo-annotation => { root.undo-annotation(); }
             clear-annotations => { root.clear-annotations(); }
-            apply-blur-region(x, y, w, h) => { root.apply-blur-region(x, y, w, h); }
+            apply-annotation(tool, color, stroke, x1, y1, x2, y2) => {
+                root.apply-annotation(tool, color, stroke, x1, y1, x2, y2);
+            }
             save-editor-snapshot => { root.save-editor-export(); }
         }
     }
