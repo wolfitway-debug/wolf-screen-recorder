@@ -56,6 +56,7 @@ export component AppWindow inherits Window {
     in-out property <string> hotkey-snapshot: "Super+Shift+S";
     in-out property <string> hotkey-region: "Super+Shift+X";
     in-out property <string> hotkey-cancel: "Escape";
+    in-out property <string> active-region-badge: "";
 
     // Callbacks
     callback select-primary-mode(string);
@@ -63,6 +64,7 @@ export component AppWindow inherits Window {
     callback take-snapshot();
     callback open-studio-editor();
     callback select-mode(string);
+    callback clear-region();
     callback select-resolution(string);
     callback toggle-audio();
     callback toggle-webcam();
@@ -251,7 +253,7 @@ export component AppWindow inherits Window {
                         HorizontalLayout {
                             padding-left: 12px; padding-right: 12px; alignment: center;
                             Text {
-                                text: root.txt-mode-region;
+                                text: root.active-region-badge == "" ? root.txt-mode-region : (root.txt-mode-region + " " + root.active-region-badge);
                                 font-size: 11px; font-weight: 800;
                                 color: root.selected-mode == "region" ? #000000 : #ffffff;
                                 vertical-alignment: center;

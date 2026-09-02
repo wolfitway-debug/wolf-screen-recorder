@@ -3,6 +3,11 @@ export component RegionSelectorWindow inherits Window {
     background: transparent;
     always-on-top: true;
 
+    in-out property <image> screen-snapshot;
+    in-out property <bool> has-snapshot: false;
+    in-out property <int> monitor-w: 1920;
+    in-out property <int> monitor-h: 1080;
+
     in-out property <int> selection-x: 0;
     in-out property <int> selection-y: 0;
     in-out property <int> selection-w: 0;
@@ -12,36 +17,62 @@ export component RegionSelectorWindow inherits Window {
     callback selection-confirmed(int, int, int, int);
     callback selection-cancelled();
 
+    // Key input listener for ESC cancel
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == "\u{001b}") { // ESC key
+                root.selection-cancelled();
+                accept
+            } else {
+                reject
+            }
+        }
+    }
+
     Rectangle {
         width: 100%;
         height: 100%;
-        background: #00000075;
 
-        // Top Helper Banner
+        // Base Layer 1: Background Screen Snapshot (if available)
+        if (root.has-snapshot) : Image {
+            width: 100%;
+            height: 100%;
+            source: root.screen-snapshot;
+        }
+
+        // Base Layer 2: 45% Translucent Dark Dim Overlay
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            background: #00000073;
+        }
+
+        // Top Helper Instruction Banner
         Rectangle {
             x: (parent.width - self.width)/2;
-            y: 30px;
-            height: 36px;
-            background: #080c14e0;
-            border-radius: 18px;
+            y: 32px;
+            height: 38px;
+            background: #080c14f0;
+            border-radius: 19px;
             border-width: 1.5px;
             border-color: #22d45e;
-            drop-shadow-blur: 16px;
+            drop-shadow-blur: 20px;
             drop-shadow-color: #000000a0;
 
             HorizontalLayout {
-                padding-left: 16px; padding-right: 16px;
+                padding-left: 18px; padding-right: 18px;
                 spacing: 8px; alignment: center;
 
                 Text { text: "✂️"; font-size: 14px; vertical-alignment: center; }
                 Text {
                     text: "Drag to select capture region · Press ESC to cancel";
-                    font-size: 11px; font-weight: 800; color: #f8fafc;
+                    font-size: 12px; font-weight: 800; color: #ffffff;
                     vertical-alignment: center;
                 }
             }
         }
 
+        // Interactive Fullscreen Mouse Touch Area
         TouchArea {
             property <int> start-x;
             property <int> start-y;
@@ -51,23 +82,25 @@ export component RegionSelectorWindow inherits Window {
             pointer-event(event) => {
                 if (event.button == PointerEventButton.left) {
                     if (event.kind == PointerEventKind.down) {
-                        self.start-x = self.mouse-x / 1px;
-                        self.start-y = self.mouse-y / 1px;
-                        root.selection-x = self.start-x;
-                        root.selection-y = self.start-y;
+                        let sx = (self.mouse-x / 1px).max(0).min(root.monitor-w);
+                        let sy = (self.mouse-y / 1px).max(0).min(root.monitor-h);
+                        self.start-x = sx;
+                        self.start-y = sy;
+                        root.selection-x = sx;
+                        root.selection-y = sy;
                         root.selection-w = 0;
                         root.selection-h = 0;
                         root.is-selecting = true;
                     } else if (event.kind == PointerEventKind.up) {
-                        let end-x = self.mouse-x / 1px;
-                        let end-y = self.mouse-y / 1px;
+                        let ex = (self.mouse-x / 1px).max(0).min(root.monitor-w);
+                        let ey = (self.mouse-y / 1px).max(0).min(root.monitor-h);
 
-                        let final-x = self.start-x.min(end-x);
-                        let final-y = self.start-y.min(end-y);
-                        let final-w = (end-x - self.start-x).abs();
-                        let final-h = (end-y - self.start-y).abs();
+                        let final-x = self.start-x.min(ex);
+                        let final-y = self.start-y.min(ey);
+                        let final-w = (ex - self.start-x).abs();
+                        let final-h = (ey - self.start-y).abs();
 
-                        if (final-w > 20 && final-h > 20) {
+                        if (final-w > 15 && final-h > 15) {
                             root.selection-confirmed(final-x, final-y, final-w, final-h);
                         } else {
                             root.selection-cancelled();
@@ -78,13 +111,13 @@ export component RegionSelectorWindow inherits Window {
 
             moved => {
                 if (root.is-selecting) {
-                    let cur-x = self.mouse-x / 1px;
-                    let cur-y = self.mouse-y / 1px;
+                    let cx = (self.mouse-x / 1px).max(0).min(root.monitor-w);
+                    let cy = (self.mouse-y / 1px).max(0).min(root.monitor-h);
 
-                    let min-x = self.start-x.min(cur-x);
-                    let min-y = self.start-y.min(cur-y);
-                    let w = (cur-x - self.start-x).abs();
-                    let h = (cur-y - self.start-y).abs();
+                    let min-x = self.start-x.min(cx);
+                    let min-y = self.start-y.min(cy);
+                    let w = (cx - self.start-x).abs();
+                    let h = (cy - self.start-y).abs();
 
                     root.selection-x = min-x;
                     root.selection-y = min-y;
@@ -94,23 +127,33 @@ export component RegionSelectorWindow inherits Window {
             }
         }
 
-        // Rubber-Band Selection Rectangle Overlay
+        // Rubber-Band Selection Box Overlay (Bright Cutout + Emerald Border)
         if (root.selection-w > 0 && root.selection-h > 0) : Rectangle {
             x: root.selection-x * 1px;
             y: root.selection-y * 1px;
             width: root.selection-w * 1px;
             height: root.selection-h * 1px;
-            background: #22d45e1a;
+            clip: true;
+            background: #22d45e15;
             border-width: 2px;
             border-color: #22d45e;
 
-            // Corner Handles
-            Rectangle { width: 8px; height: 8px; background: #22d45e; x: -4px; y: -4px; }
-            Rectangle { width: 8px; height: 8px; background: #22d45e; x: parent.width - 4px; y: -4px; }
-            Rectangle { width: 8px; height: 8px; background: #22d45e; x: -4px; y: parent.height - 4px; }
-            Rectangle { width: 8px; height: 8px; background: #22d45e; x: parent.width - 4px; y: parent.height - 4px; }
+            // Bright Cutout Layer: Re-renders the background screenshot full-brightness inside the cropped box
+            if (root.has-snapshot) : Image {
+                x: -root.selection-x * 1px;
+                y: -root.selection-y * 1px;
+                width: root.monitor-w * 1px;
+                height: root.monitor-h * 1px;
+                source: root.screen-snapshot;
+            }
 
-            // High-Contrast Dimension Feedback Badge
+            // 4-Corner Resize/Selection Grab Handles
+            Rectangle { width: 8px; height: 8px; background: #22d45e; border-radius: 2px; x: -4px; y: -4px; }
+            Rectangle { width: 8px; height: 8px; background: #22d45e; border-radius: 2px; x: parent.width - 4px; y: -4px; }
+            Rectangle { width: 8px; height: 8px; background: #22d45e; border-radius: 2px; x: -4px; y: parent.height - 4px; }
+            Rectangle { width: 8px; height: 8px; background: #22d45e; border-radius: 2px; x: parent.width - 4px; y: parent.height - 4px; }
+
+            // Centered High-Contrast Dimension Feedback Badge
             Rectangle {
                 x: (parent.width - self.width)/2;
                 y: (parent.height - self.height)/2;
@@ -119,9 +162,11 @@ export component RegionSelectorWindow inherits Window {
                 border-radius: 14px;
                 border-width: 1.5px;
                 border-color: #22d45e;
+                drop-shadow-blur: 10px;
+                drop-shadow-color: #00000080;
 
                 HorizontalLayout {
-                    padding-left: 12px; padding-right: 12px; alignment: center;
+                    padding-left: 14px; padding-right: 14px; alignment: center;
                     Text {
                         text: "📐 " + root.selection-w + " × " + root.selection-h + " px";
                         font-size: 11px; font-weight: 900; color: #22d45e;

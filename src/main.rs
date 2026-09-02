@@ -143,18 +143,49 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_selected_mode("region".into());
 
         if let Ok(region_win) = RegionSelectorWindow::new() {
-            let region_win_weak = region_win.as_weak();
+            // Get monitor resolution & live screen snapshot via xcap
+            if let Ok(monitors) = xcap::Monitor::all() {
+                if let Some(m) = monitors.first() {
+                    let w = m.width();
+                    let h = m.height();
+                    region_win.set_monitor_w(w as i32);
+                    region_win.set_monitor_h(h as i32);
+                    region_win.window().set_size(slint::PhysicalSize::new(w, h));
 
+                    if let Ok(rgba_img) = m.capture_image() {
+                        let width = rgba_img.width();
+                        let height = rgba_img.height();
+                        let raw = rgba_img.into_raw();
+                        let pixel_buffer = slint::SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
+                            &raw, width, height
+                        );
+                        region_win.set_screen_snapshot(slint::Image::from_rgba8(pixel_buffer));
+                        region_win.set_has_snapshot(true);
+                    }
+                }
+            }
+
+            let region_win_weak = region_win.as_weak();
+            let ui_main_weak = ui.as_weak();
             region_win.on_selection_confirmed(move |x, y, w, h| {
                 region::set_active_region(Some(SelectedRegion::new(x, y, w as u32, h as u32)));
+                if let Some(main_ui) = ui_main_weak.upgrade() {
+                    main_ui.set_active_region_badge(format!("({}×{})", w, h).into());
+                    main_ui.set_status_message(format!("✂️ Region: {}×{} px", w, h).into());
+                }
                 if let Some(r_win) = region_win_weak.upgrade() {
                     let _ = r_win.hide();
                 }
             });
 
             let region_win_cancel_weak = region_win.as_weak();
+            let ui_main_weak_cancel = ui.as_weak();
             region_win.on_selection_cancelled(move || {
                 region::set_active_region(None);
+                if let Some(main_ui) = ui_main_weak_cancel.upgrade() {
+                    main_ui.set_active_region_badge("".into());
+                    main_ui.set_selected_mode("desktop".into());
+                }
                 if let Some(r_win) = region_win_cancel_weak.upgrade() {
                     let _ = r_win.hide();
                 }
@@ -162,6 +193,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let _ = region_win.show();
         }
+    });
+
+    // Clear Region Callback Handler
+    let ui_handle = ui.as_weak();
+    ui.on_clear_region(move || {
+        let ui = ui_handle.unwrap();
+        region::set_active_region(None);
+        ui.set_active_region_badge("".into());
+        ui.set_status_message("Region cleared (Desktop Mode)".into());
+        ui.set_selected_mode("desktop".into());
     });
 
     // Window Picker Handler — queries open windows dynamically
