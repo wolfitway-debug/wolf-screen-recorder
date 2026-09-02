@@ -544,6 +544,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let hw_profile_clone = hw_profile.clone();
     let focus_tracker_clone = focus_tracker.clone();
     let i18n_clone = i18n.clone();
+    let config_rec_clone = config.clone();
 
     ui.on_toggle_recording(move || {
         let ui = ui_handle.unwrap();
@@ -560,8 +561,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             ui.set_status_message(status_msg.into());
 
-            let audio_path_result = if audio_flag_clone.load(Ordering::Relaxed) {
-                audio::AudioEngine::start_microphone_recording(flag_clone.clone()).ok()
+            let audio_enabled = ui.get_audio_enabled();
+            audio_flag_clone.store(audio_enabled, Ordering::Relaxed);
+
+            let audio_path_result = if audio_enabled {
+                match audio::AudioEngine::start_microphone_recording(flag_clone.clone()) {
+                    Ok(path) => {
+                        println!("[Main] Audio recording started: {:?}", path);
+                        Some(path)
+                    }
+                    Err(e) => {
+                        eprintln!("[Main] Audio capture error: {}", e);
+                        None
+                    }
+                }
             } else {
                 None
             };
@@ -572,6 +585,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let ui_handle_thread = ui.as_weak();
             let cinematic_zoom_enabled = ui.get_cinematic_zoom_enabled();
             let i18n_thread = i18n_clone.clone();
+            let config_thread = config_rec_clone.clone();
 
             std::thread::spawn(move || {
                 let temp_video_path = match capture::CaptureEngine::start_video_recording(
@@ -597,6 +611,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     chrono::Utc::now().timestamp()
                 ));
 
+                let (wm_enabled, wm_text, logo_path_opt, pos_opt) = {
+                    let cfg = config_thread.lock().unwrap();
+                    (
+                        cfg.auto_watermark,
+                        cfg.watermark_text.clone(),
+                        cfg.watermark_logo_path.clone(),
+                        cfg.watermark_position.clone(),
+                    )
+                };
+
                 let mut ffmpeg_cmd = Command::new("ffmpeg");
                 ffmpeg_cmd.arg("-y").arg("-i").arg(temp_video_path.to_str().unwrap());
 
@@ -604,20 +628,66 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ffmpeg_cmd.arg("-i").arg(audio_path.to_str().unwrap());
                 }
 
+                let mut video_filters = Vec::new();
+
                 if cinematic_zoom_enabled {
                     if let Some(vf_zoom) = focus_tracker_thread.build_ffmpeg_zoom_filter(1920, 1080, 1.3) {
-                        ffmpeg_cmd.arg("-vf").arg(vf_zoom);
+                        video_filters.push(vf_zoom);
                     }
                 }
 
-                ffmpeg_cmd.args(&[
-                    "-c:v", "libx264",
-                    "-preset", "fast",
-                    "-c:a", "aac",
-                    "-b:a", "192k",
-                    "-af", "aresample=async=1",
-                    final_muxed_path.to_str().unwrap(),
-                ]);
+                let mut custom_logo_applied = false;
+                if wm_enabled {
+                    if let Some(logo_p) = &logo_path_opt {
+                        if std::path::Path::new(logo_p).exists() {
+                            let overlay_pos = match pos_opt.as_str() {
+                                "BottomLeft" => "overlay=20:main_h-overlay_h-20",
+                                "TopRight" => "overlay=main_w-overlay_w-20:20",
+                                "TopLeft" => "overlay=20:20",
+                                _ => "overlay=main_w-overlay_w-20:main_h-overlay_h-20",
+                            };
+                            ffmpeg_cmd.arg("-i").arg(logo_p);
+                            ffmpeg_cmd.arg("-filter_complex").arg(format!("[2:v]scale=140:-1[logo];[0:v][logo]{}", overlay_pos));
+                            custom_logo_applied = true;
+                        }
+                    }
+
+                    if !custom_logo_applied && !wm_text.is_empty() {
+                        let (pos_x, pos_y) = match pos_opt.as_str() {
+                            "BottomLeft" => ("20", "h-th-20"),
+                            "TopRight" => ("w-tw-20", "20"),
+                            "TopLeft" => ("20", "20"),
+                            _ => ("w-tw-20", "h-th-20"),
+                        };
+                        let drawtext_vf = format!(
+                            "drawtext=fontfile='/home/dan/development/wolf-screen-recorder/src/assets/Roboto-Regular.ttf':text='{}':fontcolor=0x22d45e:fontsize=22:box=1:boxcolor=0x080c14@0.8:boxborderw=6:x={}:y={}",
+                            wm_text, pos_x, pos_y
+                        );
+                        video_filters.push(drawtext_vf);
+                    }
+                }
+
+                if !custom_logo_applied && !video_filters.is_empty() {
+                    ffmpeg_cmd.arg("-vf").arg(video_filters.join(","));
+                }
+
+                if audio_path_result.is_some() {
+                    ffmpeg_cmd.args(&[
+                        "-c:v", "libx264",
+                        "-preset", "fast",
+                        "-c:a", "aac",
+                        "-b:a", "192k",
+                        "-af", "aresample=async=1",
+                        "-shortest",
+                        final_muxed_path.to_str().unwrap(),
+                    ]);
+                } else {
+                    ffmpeg_cmd.args(&[
+                        "-c:v", "libx264",
+                        "-preset", "fast",
+                        final_muxed_path.to_str().unwrap(),
+                    ]);
+                }
 
                 let status = ffmpeg_cmd.status();
 

@@ -53,6 +53,8 @@ impl AnnotationEngine {
             draw_filled_circle_mut(img, (c.x, c.y), 4, inner_color);
         }
 
+        let mut logo_drawn = false;
+
         // 3. Stamp Custom Image Logo if configured
         if let Some(path) = logo_path {
             if let Ok(logo_img) = image::open(path) {
@@ -91,11 +93,12 @@ impl AnnotationEngine {
                         }
                     }
                 }
+                logo_drawn = true;
             }
         }
 
-        // 4. Automated Text Watermarking (if no logo or text requested)
-        if logo_path.is_none() {
+        // 4. Automated Text Watermarking (fallback if no logo drawn)
+        if !logo_drawn {
             if let Some(text) = watermark_text {
                 let width = img.width();
                 let height = img.height();

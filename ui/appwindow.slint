@@ -459,11 +459,11 @@ export component AppWindow inherits Window {
             active-lang: root.lang;
             active-encoder: root.active-encoder;
             save-path: root.save-path;
-            watermark-text: root.watermark-text;
-            watermark-logo-path: root.watermark-logo-path;
-            watermark-position: root.watermark-position;
-            auto-watermark: root.watermark-enabled;
-            cinematic-zoom: root.cinematic-zoom-enabled;
+            watermark-text <=> root.watermark-text;
+            watermark-logo-path <=> root.watermark-logo-path;
+            watermark-position <=> root.watermark-position;
+            auto-watermark <=> root.watermark-enabled;
+            cinematic-zoom <=> root.cinematic-zoom-enabled;
             hotkey-record: root.hotkey-record;
             hotkey-snapshot: root.hotkey-snapshot;
             hotkey-region: root.hotkey-region;
