@@ -679,8 +679,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         webcam_flag_clone.store(next, Ordering::Relaxed);
 
         if next {
-            webcam::WebcamEngine::start_feed(webcam_flag_clone.clone());
             if let Ok(pip_win) = WebcamPipWindow::new() {
+                webcam::WebcamEngine::start_feed(webcam_flag_clone.clone(), pip_win.as_weak());
+
                 let pip_weak = pip_win.as_weak();
                 pip_win.on_move_window(move |delta_x, delta_y| {
                     if let Some(pip) = pip_weak.upgrade() {
