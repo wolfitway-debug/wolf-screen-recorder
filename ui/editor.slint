@@ -1,6 +1,6 @@
 export component StudioEditor inherits Rectangle {
     width: 780px;
-    height: 520px;
+    height: 540px;
     background: #0b0f19;
     border-radius: 18px;
     border-width: 1.5px;
@@ -9,6 +9,7 @@ export component StudioEditor inherits Rectangle {
     drop-shadow-color: #00ff6640;
 
     in-out property <string> active-tool: "arrow";
+    in-out property <string> active-color: "#00FF66";
     in-out property <image> canvas-image;
     in-out property <bool> has-canvas-image: false;
     in-out property <bool> watermark-active: true;
@@ -16,8 +17,11 @@ export component StudioEditor inherits Rectangle {
 
     callback close-editor();
     callback select-tool(string);
+    callback select-color(string);
     callback open-file-dialog();
     callback copy-clipboard();
+    callback undo-annotation();
+    callback clear-annotations();
     callback apply-blur-region(int, int, int, int);
     callback save-editor-snapshot();
 
@@ -51,7 +55,7 @@ export component StudioEditor inherits Rectangle {
             }
         }
 
-        // Tools Toolbar Strip
+        // Row 1: Tools Toolbar Strip
         Rectangle {
             height: 42px;
             background: #141c2e;
@@ -73,7 +77,7 @@ export component StudioEditor inherits Rectangle {
                     TouchArea { clicked => { root.select-tool("arrow"); } }
                 }
 
-                // Tool: Text
+                // Tool: Text Callout
                 Rectangle {
                     height: 34px;
                     background: root.active-tool == "text" ? #00ff66 : transparent; border-radius: 7px;
@@ -95,15 +99,15 @@ export component StudioEditor inherits Rectangle {
                     TouchArea { clicked => { root.select-tool("blur"); } }
                 }
 
-                // Tool: Crop / Zoom
+                // Tool: Highlight Box
                 Rectangle {
                     height: 34px;
-                    background: root.active-tool == "crop" ? #00ff66 : transparent; border-radius: 7px;
+                    background: root.active-tool == "box" ? #00ff66 : transparent; border-radius: 7px;
                     HorizontalLayout {
                         padding-left: 10px; padding-right: 10px; alignment: center;
-                        Text { text: "🔍 CROP/ZOOM"; font-size: 10px; font-weight: 800; color: root.active-tool == "crop" ? #000 : #cbd5e1; vertical-alignment: center; }
+                        Text { text: "📐 BOX"; font-size: 10px; font-weight: 800; color: root.active-tool == "box" ? #000 : #cbd5e1; vertical-alignment: center; }
                     }
-                    TouchArea { clicked => { root.select-tool("crop"); } }
+                    TouchArea { clicked => { root.select-tool("box"); } }
                 }
 
                 Rectangle { width: 1px; height: 24px; background: #334155; }
@@ -127,6 +131,47 @@ export component StudioEditor inherits Rectangle {
                         Text { text: "📂 OPEN FILE"; font-size: 9px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
                     }
                     TouchArea { clicked => { root.open-file-dialog(); } }
+                }
+            }
+        }
+
+        // Row 2: Color Swatches & History Controls Bar
+        Rectangle {
+            height: 36px;
+            background: #141c2e;
+            border-radius: 8px;
+
+            HorizontalLayout {
+                padding: 4px; spacing: 8px; alignment: space-between;
+
+                // Color Swatches
+                HorizontalLayout {
+                    spacing: 6px; alignment: center;
+
+                    Text { text: "COLOR:"; font-size: 9px; font-weight: 800; color: #94a3b8; vertical-alignment: center; }
+
+                    Rectangle { width: 22px; height: 22px; background: #00ff66; border-radius: 11px; border-width: root.active-color == "#00FF66" ? 2px : 0px; border-color: #fff; TouchArea { clicked => { root.select-color("#00FF66"); } } }
+                    Rectangle { width: 22px; height: 22px; background: #3b82f6; border-radius: 11px; border-width: root.active-color == "#3B82F6" ? 2px : 0px; border-color: #fff; TouchArea { clicked => { root.select-color("#3B82F6"); } } }
+                    Rectangle { width: 22px; height: 22px; background: #ff3b30; border-radius: 11px; border-width: root.active-color == "#FF3B30" ? 2px : 0px; border-color: #fff; TouchArea { clicked => { root.select-color("#FF3B30"); } } }
+                    Rectangle { width: 22px; height: 22px; background: #f59e0b; border-radius: 11px; border-width: root.active-color == "#F59E0B" ? 2px : 0px; border-color: #fff; TouchArea { clicked => { root.select-color("#F59E0B"); } } }
+                    Rectangle { width: 22px; height: 22px; background: #ffffff; border-radius: 11px; border-width: root.active-color == "#FFFFFF" ? 2px : 0px; border-color: #000; TouchArea { clicked => { root.select-color("#FFFFFF"); } } }
+                }
+
+                // History Buttons (Undo / Clear)
+                HorizontalLayout {
+                    spacing: 6px;
+
+                    Rectangle {
+                        height: 28px; background: #1e293b; border-radius: 6px;
+                        HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "↩️ UNDO"; font-size: 9px; font-weight: 800; color: #cbd5e1; vertical-alignment: center; } }
+                        TouchArea { clicked => { root.undo-annotation(); } }
+                    }
+
+                    Rectangle {
+                        height: 28px; background: #1e293b; border-radius: 6px;
+                        HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "🗑️ CLEAR"; font-size: 9px; font-weight: 800; color: #ef4444; vertical-alignment: center; } }
+                        TouchArea { clicked => { root.clear-annotations(); } }
+                    }
                 }
             }
         }

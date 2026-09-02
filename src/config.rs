@@ -4,12 +4,15 @@ use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
+    pub primary_mode: String, // "image" or "video"
     pub language: String,
     pub hw_encoder_override: String,
     pub save_directory: String,
     pub default_fps: u32,
     pub crf_quality: u8,
     pub watermark_text: String,
+    pub watermark_logo_path: Option<String>,
+    pub watermark_position: String, // "BottomRight", "BottomLeft", "TopRight", "TopLeft"
     pub auto_watermark: bool,
     pub cinematic_zoom: bool,
     pub paddle_checkout_url: String,
@@ -24,12 +27,15 @@ impl Default for AppConfig {
             .to_string();
 
         Self {
+            primary_mode: "image".to_string(),
             language: "en".to_string(),
             hw_encoder_override: "Auto".to_string(),
             save_directory: default_dir,
             default_fps: 30,
             crf_quality: 23,
             watermark_text: "WOLFITWAY".to_string(),
+            watermark_logo_path: None,
+            watermark_position: "BottomRight".to_string(),
             auto_watermark: true,
             cinematic_zoom: true,
             paddle_checkout_url: "https://buy.paddle.com/placeholder-wolfitway".to_string(),

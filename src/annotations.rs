@@ -1,7 +1,8 @@
-use image::{DynamicImage, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 use imageproc::drawing::{draw_filled_circle_mut, draw_hollow_circle_mut, draw_hollow_rect_mut, draw_text_mut};
 use imageproc::rect::Rect;
 use ab_glyph::{FontRef, PxScale};
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub struct ClickAnnotation {
@@ -29,10 +30,11 @@ impl AnnotationEngine {
         clicks: &[ClickAnnotation],
         boxes: &[BoundingBoxAnnotation],
         watermark_text: Option<&str>,
+        logo_path: Option<&PathBuf>,
+        position: &str,
     ) {
         // 1. Draw Bounding Boxes with subtle drop shadow effect
         for b in boxes {
-            // Drop shadow offset
             let shadow_color = Rgba([0, 0, 0, 120]);
             let shadow_rect = Rect::at(b.x + 3, b.y + 3).of_size(b.width, b.height);
             draw_hollow_rect_mut(img, shadow_rect, shadow_color);
@@ -41,32 +43,61 @@ impl AnnotationEngine {
             draw_hollow_rect_mut(img, main_rect, b.color);
         }
 
-        // 2. Draw Click Radii (Pulse circles around click coordinates)
+        // 2. Draw Click Radii
         for c in clicks {
             let outer_color = Rgba([c.color[0], c.color[1], c.color[2], 160]);
             let inner_color = Rgba([c.color[0], c.color[1], c.color[2], 230]);
             
-            // Outer translucent circle
             draw_hollow_circle_mut(img, (c.x, c.y), c.radius, outer_color);
             draw_hollow_circle_mut(img, (c.x, c.y), c.radius + 1, outer_color);
-            // Core filled point
             draw_filled_circle_mut(img, (c.x, c.y), 4, inner_color);
         }
 
-        // 3. Automated Watermarking ("WOLFITWAY" / custom creator watermark)
+        // 3. Stamp Custom Image Logo if configured
+        if let Some(path) = logo_path {
+            if let Ok(logo_img) = image::open(path) {
+                let logo_rgba = logo_img.to_rgba8();
+                let (logo_w, logo_h) = logo_img.dimensions();
+
+                let (offset_x, offset_y) = Self::calculate_corner_position(
+                    img.width(),
+                    img.height(),
+                    logo_w,
+                    logo_h,
+                    position,
+                );
+
+                for x in 0..logo_w {
+                    for y in 0..logo_h {
+                        let target_x = offset_x + x;
+                        let target_y = offset_y + y;
+                        if target_x < img.width() && target_y < img.height() {
+                            let logo_pixel = logo_rgba.get_pixel(x, y);
+                            if logo_pixel[3] > 10 {
+                                img.put_pixel(target_x, target_y, *logo_pixel);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 4. Automated Text Watermarking
         if let Some(text) = watermark_text {
             let width = img.width();
             let height = img.height();
 
-            // Bottom-right watermark positioning
-            let margin_x = if width > 200 { width - 180 } else { 10 };
-            let margin_y = if height > 40 { height - 35 } else { 10 };
+            let (margin_x, margin_y) = Self::calculate_corner_position(
+                width,
+                height,
+                170,
+                26,
+                position,
+            );
 
-            // Watermark background tag box
-            let bg_rect = Rect::at(margin_x as i32 - 8, margin_y as i32 - 4).of_size(170, 26);
+            let bg_rect = Rect::at(margin_x as i32 - 4, margin_y as i32 - 4).of_size(170, 26);
             let bg_color = Rgba([18, 22, 30, 200]);
             
-            // Draw semi-transparent background badge
             for x in bg_rect.left()..bg_rect.right() {
                 for y in bg_rect.top()..bg_rect.bottom() {
                     if x >= 0 && x < width as i32 && y >= 0 && y < height as i32 {
@@ -78,7 +109,6 @@ impl AnnotationEngine {
                 }
             }
 
-            // Draw crisp typography fallback using default font glyphs if available
             let font_data = include_bytes!("assets/Roboto-Regular.ttf");
             if let Ok(font) = FontRef::try_from_slice(font_data) {
                 draw_text_mut(
@@ -94,6 +124,21 @@ impl AnnotationEngine {
         }
     }
 
+    fn calculate_corner_position(
+        img_w: u32,
+        img_h: u32,
+        elem_w: u32,
+        elem_h: u32,
+        position: &str,
+    ) -> (u32, u32) {
+        match position {
+            "BottomLeft" => (20, img_h.saturating_sub(elem_h + 20)),
+            "TopRight" => (img_w.saturating_sub(elem_w + 20), 20),
+            "TopLeft" => (20, 20),
+            _ => (img_w.saturating_sub(elem_w + 20), img_h.saturating_sub(elem_h + 20)), // BottomRight default
+        }
+    }
+
     pub fn process_snapshot_with_watermark(
         dyn_img: &mut DynamicImage,
         watermark: &str,
@@ -106,7 +151,7 @@ impl AnnotationEngine {
             color: Rgba([0, 255, 102, 255]),
         };
 
-        Self::apply_annotations(&mut rgba, &[default_click], &[], Some(watermark));
+        Self::apply_annotations(&mut rgba, &[default_click], &[], Some(watermark), None, "BottomRight");
         *dyn_img = DynamicImage::ImageRgba8(rgba);
     }
 }

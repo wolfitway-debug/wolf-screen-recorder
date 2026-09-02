@@ -2,13 +2,14 @@ import { SettingsModal } from "settings.slint";
 import { StudioEditor } from "editor.slint";
 
 export component AppWindow inherits Window {
-    width: root.show-settings-modal ? 660px : (root.show-editor-modal ? 800px : 740px);
-    height: root.show-settings-modal ? 420px : (root.show-editor-modal ? 540px : 86px);
+    width: root.show-settings-modal ? 660px : (root.show-editor-modal ? 800px : 760px);
+    height: root.show-settings-modal ? 420px : (root.show-editor-modal ? 560px : 96px);
     no-frame: true;
     background: transparent;
     always-on-top: true;
 
     // Core Properties
+    in-out property <string> primary-mode: "image"; // "image" or "video"
     in-out property <bool> is-recording: false;
     in-out property <string> selected-mode: "desktop";
     in-out property <string> resolution: "1080p";
@@ -37,6 +38,7 @@ export component AppWindow inherits Window {
     in-out property <bool> cinematic-zoom-enabled: true;
 
     // Callbacks
+    callback select-primary-mode(string);
     callback toggle-recording();
     callback take-snapshot();
     callback open-studio-editor();
@@ -49,7 +51,10 @@ export component AppWindow inherits Window {
     callback select-encoder(string);
     callback save-config();
     callback open-file-dialog();
+    callback upload-logo-dialog();
     callback copy-clipboard();
+    callback undo-annotation();
+    callback clear-annotations();
     callback apply-blur-region(int, int, int, int);
     callback save-editor-export();
     callback open-paddle-checkout();
@@ -86,289 +91,153 @@ export component AppWindow inherits Window {
 
         // View 1: Main Floating Recorder Toolbar
         if (!root.show-settings-modal && !root.show-editor-modal) : VerticalLayout {
-            padding: 10px;
-            spacing: 8px;
+            padding: 8px;
+            spacing: 6px;
 
-            // Row 1: Brand & Control Toolbar
+            // Top Primary Mode Switcher Bar ([📷 IMAGE SNAP] | [📹 VIDEO REC])
             HorizontalLayout {
                 spacing: 8px;
                 alignment: space-between;
 
                 // Logo Badge
                 Rectangle {
-                    height: 36px;
-                    background: #141c2e;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: #23314d;
-
+                    height: 32px; background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #23314d;
                     HorizontalLayout {
-                        padding-left: 10px;
-                        padding-right: 10px;
-                        spacing: 6px;
-                        alignment: center;
-
-                        Text {
-                            text: "🐺 WOLFCAP";
-                            font-size: 11px;
-                            font-weight: 900;
-                            color: #00ff66;
-                            vertical-alignment: center;
-                        }
-
+                        padding-left: 8px; padding-right: 8px; spacing: 4px; alignment: center;
+                        Text { text: "🐺 WOLFCAP"; font-size: 11px; font-weight: 900; color: #00ff66; vertical-alignment: center; }
                         Rectangle {
-                            height: 18px;
-                            background: #1e293b;
-                            border-radius: 5px;
-
-                            HorizontalLayout {
-                                padding-left: 5px;
-                                padding-right: 5px;
-                                alignment: center;
-
-                                Text {
-                                    text: root.hw-encoder-tag;
-                                    font-size: 9px;
-                                    font-weight: 800;
-                                    color: #38bdf8;
-                                    vertical-alignment: center;
-                                }
-                            }
+                            height: 16px; background: #1e293b; border-radius: 4px;
+                            HorizontalLayout { padding-left: 4px; padding-right: 4px; alignment: center; Text { text: root.hw-encoder-tag; font-size: 8px; font-weight: 800; color: #38bdf8; vertical-alignment: center; } }
                         }
                     }
                 }
 
+                // Primary Mode Pill Toggle
+                Rectangle {
+                    height: 32px; background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #23314d;
+                    HorizontalLayout {
+                        padding: 2px; spacing: 2px;
+                        Rectangle {
+                            height: 28px;
+                            background: root.primary-mode == "image" ? #00ff66 : transparent; border-radius: 6px;
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "📷 IMAGE SNAP"; font-size: 10px; font-weight: 900; color: root.primary-mode == "image" ? #000 : #94a3b8; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select-primary-mode("image"); } }
+                        }
+                        Rectangle {
+                            height: 28px;
+                            background: root.primary-mode == "video" ? #00ff66 : transparent; border-radius: 6px;
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "📹 VIDEO REC"; font-size: 10px; font-weight: 900; color: root.primary-mode == "video" ? #000 : #94a3b8; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.select-primary-mode("video"); } }
+                        }
+                    }
+                }
+
+                // Language Switcher & Settings Buttons
+                HorizontalLayout {
+                    spacing: 5px;
+
+                    Rectangle {
+                        width: 40px; height: 32px; background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #3b82f6;
+                        Text { text: root.lang == "ro" ? "RO" : (root.lang == "es" ? "ES" : (root.lang == "de" ? "DE" : (root.lang == "fr" ? "FR" : (root.lang == "ja" ? "JA" : "EN")))); font-size: 10px; font-weight: 900; color: #3b82f6; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                        TouchArea { clicked => { root.toggle-language(); } }
+                    }
+
+                    Rectangle {
+                        width: 34px; height: 32px; background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #23314d;
+                        Text { text: "SET"; font-size: 9px; font-weight: 800; color: #cbd5e1; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                        TouchArea { clicked => { root.show-settings-modal = true; } }
+                    }
+                }
+            }
+
+            // Row 2: Adapted State Toolbar Controls
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: space-between;
+
                 // Mode Selector Pills (FULL / WIN / CROP)
                 Rectangle {
-                    height: 36px;
-                    background: #141c2e;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: #23314d;
-
+                    height: 34px; background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #23314d;
                     HorizontalLayout {
-                        padding: 3px;
-                        spacing: 3px;
-
+                        padding: 2px; spacing: 2px;
                         Rectangle {
-                            width: 48px; height: 30px;
-                            background: root.selected-mode == "desktop" ? #00ff66 : transparent;
-                            border-radius: 7px;
-                            Text {
-                                text: "FULL";
-                                font-size: 10px; font-weight: 800;
-                                color: root.selected-mode == "desktop" ? #000000 : #94a3b8;
-                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                            }
+                            width: 46px; height: 28px; background: root.selected-mode == "desktop" ? #00ff66 : transparent; border-radius: 6px;
+                            Text { text: "FULL"; font-size: 9px; font-weight: 800; color: root.selected-mode == "desktop" ? #000 : #94a3b8; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
                             TouchArea { clicked => { root.select-mode("desktop"); } }
                         }
-
                         Rectangle {
-                            width: 48px; height: 30px;
-                            background: root.selected-mode == "window" ? #00ff66 : transparent;
-                            border-radius: 7px;
-                            Text {
-                                text: "WIN";
-                                font-size: 10px; font-weight: 800;
-                                color: root.selected-mode == "window" ? #000000 : #94a3b8;
-                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                            }
+                            width: 46px; height: 28px; background: root.selected-mode == "window" ? #00ff66 : transparent; border-radius: 6px;
+                            Text { text: "WIN"; font-size: 9px; font-weight: 800; color: root.selected-mode == "window" ? #000 : #94a3b8; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
                             TouchArea { clicked => { root.select-mode("window"); } }
                         }
-
                         Rectangle {
-                            width: 48px; height: 30px;
-                            background: root.selected-mode == "region" ? #00ff66 : transparent;
-                            border-radius: 7px;
-                            Text {
-                                text: "CROP";
-                                font-size: 10px; font-weight: 800;
-                                color: root.selected-mode == "region" ? #000000 : #94a3b8;
-                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                            }
+                            width: 46px; height: 28px; background: root.selected-mode == "region" ? #00ff66 : transparent; border-radius: 6px;
+                            Text { text: "CROP"; font-size: 9px; font-weight: 800; color: root.selected-mode == "region" ? #000 : #94a3b8; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
                             TouchArea { clicked => { root.select-mode("region"); } }
                         }
                     }
                 }
 
-                // Audio & Cam Toggles
-                HorizontalLayout {
-                    spacing: 5px;
-
+                // Audio & Cam Toggles (Video Mode)
+                if (root.primary-mode == "video") : HorizontalLayout {
+                    spacing: 4px;
                     Rectangle {
-                        width: 54px; height: 36px;
-                        background: root.audio-enabled ? #1e293b : #141c2e;
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.audio-enabled ? #00ff66 : #23314d;
-
-                        Text {
-                            text: root.audio-enabled ? "MIC ON" : "MIC OFF";
-                            font-size: 9px; font-weight: 800;
-                            color: root.audio-enabled ? #00ff66 : #64748b;
-                            x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                        }
+                        width: 50px; height: 34px; background: root.audio-enabled ? #1e293b : #141c2e; border-radius: 8px; border-width: 1px; border-color: root.audio-enabled ? #00ff66 : #23314d;
+                        Text { text: root.audio-enabled ? "MIC ON" : "MIC OFF"; font-size: 9px; font-weight: 800; color: root.audio-enabled ? #00ff66 : #64748b; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
                         TouchArea { clicked => { root.toggle-audio(); } }
                     }
-
                     Rectangle {
-                        width: 54px; height: 36px;
-                        background: root.webcam-enabled ? #1e293b : #141c2e;
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.webcam-enabled ? #00ff66 : #23314d;
-
-                        Text {
-                            text: root.webcam-enabled ? "CAM ON" : "CAM OFF";
-                            font-size: 9px; font-weight: 800;
-                            color: root.webcam-enabled ? #00ff66 : #64748b;
-                            x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                        }
+                        width: 50px; height: 34px; background: root.webcam-enabled ? #1e293b : #141c2e; border-radius: 8px; border-width: 1px; border-color: root.webcam-enabled ? #00ff66 : #23314d;
+                        Text { text: root.webcam-enabled ? "CAM ON" : "CAM OFF"; font-size: 9px; font-weight: 800; color: root.webcam-enabled ? #00ff66 : #64748b; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
                         TouchArea { clicked => { root.toggle-webcam(); } }
                     }
                 }
 
-                // Language Switcher Toggle
-                Rectangle {
-                    width: 46px; height: 36px;
-                    background: #141c2e;
-                    border-radius: 10px;
-                    border-width: 1.2px;
-                    border-color: #3b82f6;
-
-                    Text {
-                        text: root.lang == "ro" ? "RO" : (root.lang == "es" ? "ES" : (root.lang == "de" ? "DE" : (root.lang == "fr" ? "FR" : (root.lang == "ja" ? "JA" : "EN"))));
-                        font-size: 11px; font-weight: 900;
-                        color: #3b82f6;
-                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                // File Open & Studio Editor Buttons (Image Mode)
+                if (root.primary-mode == "image") : HorizontalLayout {
+                    spacing: 5px;
+                    Rectangle {
+                        height: 34px; background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #3b82f6;
+                        HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "📂 OPEN"; font-size: 9px; font-weight: 800; color: #38bdf8; vertical-alignment: center; } }
+                        TouchArea { clicked => { root.open-file-dialog(); } }
                     }
-                    TouchArea { clicked => { root.toggle-language(); } }
+                    Rectangle {
+                        height: 34px; background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #00ff66;
+                        HorizontalLayout { padding-left: 8px; padding-right: 8px; alignment: center; Text { text: "🎨 STUDIO"; font-size: 9px; font-weight: 900; color: #00ff66; vertical-alignment: center; } }
+                        TouchArea { clicked => { root.open-studio-editor(); } }
+                    }
                 }
 
-                // Studio Canvas Editor Button
-                Rectangle {
-                    width: 44px; height: 36px;
-                    background: root.show-editor-modal ? #00ff66 : #141c2e;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: #23314d;
-
-                    Text {
-                        text: "EDIT";
-                        font-size: 9px; font-weight: 900;
-                        color: root.show-editor-modal ? #000000 : #00ff66;
-                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                    }
-                    TouchArea { clicked => { root.open-studio-editor(); } }
-                }
-
-                // Settings Button (Opens Full Preferences Modal)
-                Rectangle {
-                    width: 36px; height: 36px;
-                    background: root.show-settings-modal ? #3b82f6 : #141c2e;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: #23314d;
-
-                    Text {
-                        text: "SET";
-                        font-size: 9px; font-weight: 800;
-                        color: root.show-settings-modal ? #ffffff : #cbd5e1;
-                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                    }
-                    TouchArea { clicked => { root.show-settings-modal = !root.show-settings-modal; } }
-                }
-
-                // Snapshot Button
-                Rectangle {
-                    width: 36px; height: 36px;
-                    background: #141c2e;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: #23314d;
-
-                    Text {
-                        text: "SNAP";
-                        font-size: 9px; font-weight: 800;
-                        color: #f59e0b;
-                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
-                    }
+                // Primary CTA Action Pill
+                if (root.primary-mode == "image") : Rectangle {
+                    width: 130px; height: 34px; background: #00ff66; border-radius: 8px;
+                    HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "📸 SNAP IMAGE"; font-size: 11px; font-weight: 900; color: #000; vertical-alignment: center; } }
                     TouchArea { clicked => { root.take-snapshot(); } }
                 }
 
-                // REC Button
-                rec_btn := Rectangle {
-                    width: 110px; height: 36px;
-                    background: root.is-recording ? #ff3b30 : (rec_touch.has-hover ? #00e65c : #00ff66);
-                    border-radius: 10px;
-
-                    animate background { duration: 120ms; }
-
+                if (root.primary-mode == "video") : Rectangle {
+                    width: 130px; height: 34px;
+                    background: root.is-recording ? #ff3b30 : #00ff66; border-radius: 8px;
                     HorizontalLayout {
-                        alignment: center;
-                        spacing: 6px;
-
-                        Rectangle {
-                            width: 8px; height: 8px;
-                            background: root.is-recording ? #ffffff : #000000;
-                            border-radius: 4px;
-                            y: (parent.height - self.height)/2;
-                        }
-
-                        Text {
-                            text: root.is-recording ? "STOP" : "REC";
-                            font-size: 12px; font-weight: 900;
-                            color: root.is-recording ? #ffffff : #000000;
-                            vertical-alignment: center;
-                        }
+                        alignment: center; spacing: 6px;
+                        Rectangle { width: 8px; height: 8px; background: root.is-recording ? #fff : #000; border-radius: 4px; y: (parent.height - self.height)/2; }
+                        Text { text: root.is-recording ? "STOP REC" : "🔴 RECORD"; font-size: 11px; font-weight: 900; color: root.is-recording ? #fff : #000; vertical-alignment: center; }
                     }
-
-                    rec_touch := TouchArea { clicked => { root.toggle-recording(); } }
+                    TouchArea { clicked => { root.toggle-recording(); } }
                 }
             }
 
-            // Row 2: Status & Support Strip
+            // Row 3: Status Strip
             HorizontalLayout {
-                padding-left: 4px; padding-right: 4px;
-                alignment: space-between;
-
-                // Status text
+                padding-left: 4px; padding-right: 4px; alignment: space-between;
                 HorizontalLayout {
-                    spacing: 6px;
-                    alignment: center;
-
-                    Rectangle {
-                        width: 6px; height: 6px;
-                        background: root.is-recording ? #ff3b30 : #00ff66;
-                        border-radius: 3px;
-                        y: (parent.height - self.height)/2;
-                    }
-
-                    Text {
-                        text: "STATUS: " + root.status-message;
-                        font-size: 10px;
-                        font-weight: 700;
-                        color: #94a3b8;
-                        vertical-alignment: center;
-                    }
+                    spacing: 6px; alignment: center;
+                    Rectangle { width: 6px; height: 6px; background: root.is-recording ? #ff3b30 : #00ff66; border-radius: 3px; y: (parent.height - self.height)/2; }
+                    Text { text: "STATUS: " + root.status-message; font-size: 9px; font-weight: 700; color: #94a3b8; vertical-alignment: center; }
                 }
-
-                // Support button
                 Rectangle {
-                    height: 22px;
-                    background: #6366f1;
-                    border-radius: 6px;
-
-                    HorizontalLayout {
-                        padding-left: 8px; padding-right: 8px;
-                        alignment: center;
-
-                        Text {
-                            text: "💖 SUPPORT THE DEV";
-                            font-size: 9px; font-weight: 800; color: #ffffff;
-                            vertical-alignment: center;
-                        }
-                    }
+                    height: 20px; background: #6366f1; border-radius: 5px;
+                    HorizontalLayout { padding-left: 6px; padding-right: 6px; alignment: center; Text { text: "💖 SUPPORT THE DEV"; font-size: 8px; font-weight: 800; color: #ffffff; vertical-alignment: center; } }
                     TouchArea { clicked => { root.show-support-modal = true; } }
                 }
             }
@@ -376,15 +245,8 @@ export component AppWindow inherits Window {
 
         // View 2: Dedicated Full Settings Modal View
         if (root.show-settings-modal) : SettingsModal {
-            width: 100%;
-            height: 100%;
-            active-lang: root.lang;
-            active-encoder: root.active-encoder;
-            save-path: root.save-path;
-            watermark-text: root.watermark-text;
-            auto-watermark: root.watermark-enabled;
-            cinematic-zoom: root.cinematic-zoom-enabled;
-
+            width: 100%; height: 100%;
+            active-lang: root.lang; active-encoder: root.active-encoder; save-path: root.save-path; watermark-text: root.watermark-text; auto-watermark: root.watermark-enabled; cinematic-zoom: root.cinematic-zoom-enabled;
             close-settings => { root.show-settings-modal = false; }
             select-language(l) => { root.select-language(l); }
             select-encoder(e) => { root.select-encoder(e); }
@@ -393,15 +255,13 @@ export component AppWindow inherits Window {
 
         // View 3: Dedicated Full Studio Editor Canvas View
         if (root.show-editor-modal) : StudioEditor {
-            width: 100%;
-            height: 100%;
-            canvas-image: root.canvas-image;
-            has-canvas-image: root.has-canvas-image;
-            watermark-active: root.watermark-enabled;
-
+            width: 100%; height: 100%;
+            canvas-image: root.canvas-image; has-canvas-image: root.has-canvas-image; watermark-active: root.watermark-enabled;
             close-editor => { root.show-editor-modal = false; }
             open-file-dialog => { root.open-file-dialog(); }
             copy-clipboard => { root.copy-clipboard(); }
+            undo-annotation => { root.undo-annotation(); }
+            clear-annotations => { root.clear-annotations(); }
             apply-blur-region(x, y, w, h) => { root.apply-blur-region(x, y, w, h); }
             save-editor-snapshot => { root.save-editor-export(); }
         }

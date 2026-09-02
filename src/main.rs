@@ -20,7 +20,7 @@ use hardware::HardwareProfile;
 use focus::FocusTracker;
 use config::AppConfig;
 use i18n::I18nEngine;
-use editor::EditorEngine;
+use editor::{AnnotationShape, AnnotationStack, EditorEngine};
 use hotkeys::{HotkeyCommand, HotkeyDaemon};
 
 slint::include_modules!();
@@ -28,8 +28,9 @@ slint::include_modules!();
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
 
-    // Active image buffer in memory for Studio Editor
-    let active_image_buffer: Arc<Mutex<Option<RgbaImage>>> = Arc::new(Mutex::new(None));
+    // Active image buffer & annotation stack for Studio Editor
+    let active_base_image: Arc<Mutex<Option<RgbaImage>>> = Arc::new(Mutex::new(None));
+    let active_annotation_stack: Arc<Mutex<AnnotationStack>> = Arc::new(Mutex::new(AnnotationStack::default()));
 
     // Load persistent configuration and i18n localization engine
     let config = Arc::new(Mutex::new(AppConfig::load()));
@@ -38,6 +39,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Apply initial config to UI
     {
         let cfg = config.lock().unwrap();
+        ui.set_primary_mode(cfg.primary_mode.as_str().into());
         ui.set_lang(cfg.language.as_str().into());
         ui.set_active_encoder(cfg.hw_encoder_override.as_str().into());
         ui.set_save_path(cfg.save_directory.as_str().into());
@@ -60,11 +62,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let focus_tracker = FocusTracker::new();
 
-    // Module 1: Start Global System-Wide Hotkey Daemon thread (Super + Shift + R/S/X)
+    // Module 1: Start Global System-Wide Hotkey Daemon thread
     let (hotkey_tx, hotkey_rx) = channel::<HotkeyCommand>();
     HotkeyDaemon::start(hotkey_tx);
 
-    // Cross-thread Hotkey Command Dispatcher channel receiver thread
+    // Cross-thread Hotkey Command Dispatcher
     let ui_weak_hotkey = ui.as_weak();
     std::thread::spawn(move || {
         while let Ok(cmd) = hotkey_rx.recv() {
@@ -73,16 +75,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if let Some(ui) = ui_weak.upgrade() {
                     match cmd {
                         HotkeyCommand::ToggleRecord => {
-                            println!("[HotkeyDispatcher] Toggling recording via Global Shortcut!");
                             ui.invoke_toggle_recording();
                         }
                         HotkeyCommand::Snapshot => {
-                            println!("[HotkeyDispatcher] Taking instant snapshot via Global Shortcut!");
                             ui.invoke_take_snapshot();
                             ui.invoke_open_studio_editor();
                         }
                         HotkeyCommand::RegionSelect => {
-                            println!("[HotkeyDispatcher] Opening Region Selector via Global Shortcut!");
                             ui.set_selected_mode("region".into());
                         }
                         HotkeyCommand::Cancel => {
@@ -95,6 +94,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Primary Mode Switcher Handler (Image Snap vs Video Rec)
+    let config_clone = config.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_select_primary_mode(move |mode_str| {
+        let ui = ui_handle.unwrap();
+        ui.set_primary_mode(mode_str.clone());
+        let mut cfg = config_clone.lock().unwrap();
+        cfg.primary_mode = mode_str.as_str().to_string();
+        cfg.save();
+        println!("[Main] Switched primary mode to: {}", mode_str);
+    });
+
     // Window position dragging handler
     let ui_handle = ui.as_weak();
     ui.on_move_window(move |delta_x, delta_y| {
@@ -105,7 +116,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.window().set_position(slint::PhysicalPosition::new(new_x, new_y));
     });
 
-    // Language Toggle / Cycle Handler (EN -> RO -> ES -> DE -> FR -> JA)
+    // Language Toggle / Cycle Handler
     let i18n_clone = i18n.clone();
     let config_clone = config.clone();
     let ui_handle = ui.as_weak();
@@ -169,78 +180,135 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.save();
     });
 
+    // Custom Watermark Logo Upload Handler
+    let config_clone = config.clone();
+    ui.on_upload_logo_dialog(move || {
+        if let Some(logo_path) = EditorEngine::pick_logo_file() {
+            let path_str = logo_path.to_string_lossy().to_string();
+            let mut cfg = config_clone.lock().unwrap();
+            cfg.watermark_logo_path = Some(path_str.clone());
+            cfg.save();
+            println!("[Config] Custom Watermark Logo set to: {}", path_str);
+        }
+    });
+
     // Open External Image File Picker Handler
-    let active_img_clone = active_image_buffer.clone();
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     ui.on_open_file_dialog(move || {
         let ui = ui_handle.unwrap();
         if let Some(path) = EditorEngine::pick_image_file() {
             if let Ok(rgba) = EditorEngine::load_image(&path) {
+                stack_clone.lock().unwrap().clear();
                 let slint_img = EditorEngine::rgba_to_slint_image(&rgba);
                 ui.set_canvas_image(slint_img);
                 ui.set_has_canvas_image(true);
                 ui.set_show_editor_modal(true);
-                *active_img_clone.lock().unwrap() = Some(rgba);
+                *base_img_clone.lock().unwrap() = Some(rgba);
                 println!("[EditorEngine] Loaded image file from disk: {:?}", path);
             }
         }
     });
 
     // Copy Snapshot to Clipboard Handler
-    let active_img_clone = active_image_buffer.clone();
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     ui.on_copy_clipboard(move || {
         let ui = ui_handle.unwrap();
-        if let Some(rgba) = active_img_clone.lock().unwrap().as_ref() {
-            if let Ok(()) = EditorEngine::copy_to_clipboard(rgba) {
+        if let Some(base) = base_img_clone.lock().unwrap().as_ref() {
+            let rendered = stack_clone.lock().unwrap().render_shapes(base);
+            if let Ok(()) = EditorEngine::copy_to_clipboard(&rendered) {
                 ui.set_status_message("Copied snapshot to clipboard!".into());
             }
         }
     });
 
+    // Undo Annotation Handler
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_undo_annotation(move || {
+        let ui = ui_handle.unwrap();
+        stack_clone.lock().unwrap().undo();
+        if let Some(base) = base_img_clone.lock().unwrap().as_ref() {
+            let rendered = stack_clone.lock().unwrap().render_shapes(base);
+            let slint_img = EditorEngine::rgba_to_slint_image(&rendered);
+            ui.set_canvas_image(slint_img);
+        }
+    });
+
+    // Clear Annotations Handler
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_clear_annotations(move || {
+        let ui = ui_handle.unwrap();
+        stack_clone.lock().unwrap().clear();
+        if let Some(base) = base_img_clone.lock().unwrap().as_ref() {
+            let slint_img = EditorEngine::rgba_to_slint_image(base);
+            ui.set_canvas_image(slint_img);
+        }
+    });
+
     // Open Studio Editor Handler
-    let active_img_clone = active_image_buffer.clone();
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     ui.on_open_studio_editor(move || {
         let ui = ui_handle.unwrap();
-        if active_img_clone.lock().unwrap().is_none() {
+        if base_img_clone.lock().unwrap().is_none() {
             if let Ok(path) = capture::CaptureEngine::save_screenshot(Some("WOLFITWAY")) {
                 if let Ok(rgba) = EditorEngine::load_image(&path) {
+                    stack_clone.lock().unwrap().clear();
                     let slint_img = EditorEngine::rgba_to_slint_image(&rgba);
                     ui.set_canvas_image(slint_img);
                     ui.set_has_canvas_image(true);
-                    *active_img_clone.lock().unwrap() = Some(rgba);
+                    *base_img_clone.lock().unwrap() = Some(rgba);
                 }
             }
-        } else if let Some(rgba) = active_img_clone.lock().unwrap().as_ref() {
-            let slint_img = EditorEngine::rgba_to_slint_image(rgba);
+        } else if let Some(base) = base_img_clone.lock().unwrap().as_ref() {
+            let rendered = stack_clone.lock().unwrap().render_shapes(base);
+            let slint_img = EditorEngine::rgba_to_slint_image(&rendered);
             ui.set_canvas_image(slint_img);
             ui.set_has_canvas_image(true);
         }
         ui.set_show_editor_modal(true);
     });
 
-    // Interactive Canvas Redaction Handler
-    let active_img_clone = active_image_buffer.clone();
+    // Interactive Canvas Annotation Drag Handler
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     ui.on_apply_blur_region(move |x, y, w, h| {
         let ui = ui_handle.unwrap();
-        if let Some(rgba) = active_img_clone.lock().unwrap().as_mut() {
-            EditorEngine::apply_blur_redaction(rgba, x, y, w as u32, h as u32);
-            let updated_slint_img = EditorEngine::rgba_to_slint_image(rgba);
+        let redaction_shape = AnnotationShape::RedactBox {
+            x,
+            y,
+            width: w as u32,
+            height: h as u32,
+        };
+        stack_clone.lock().unwrap().push(redaction_shape);
+
+        if let Some(base) = base_img_clone.lock().unwrap().as_ref() {
+            let rendered = stack_clone.lock().unwrap().render_shapes(base);
+            let updated_slint_img = EditorEngine::rgba_to_slint_image(&rendered);
             ui.set_canvas_image(updated_slint_img);
         }
     });
 
     // Interactive Studio Export Handler
     let config_clone = config.clone();
-    let active_img_clone = active_image_buffer.clone();
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     ui.on_save_editor_export(move || {
         let ui = ui_handle.unwrap();
         let save_dir = config_clone.lock().unwrap().save_directory.clone();
-        if let Some(rgba) = active_img_clone.lock().unwrap().as_ref() {
-            let dyn_img = image::DynamicImage::ImageRgba8(rgba.clone());
+        if let Some(base) = base_img_clone.lock().unwrap().as_ref() {
+            let rendered = stack_clone.lock().unwrap().render_shapes(base);
+            let dyn_img = image::DynamicImage::ImageRgba8(rendered);
             if let Ok(path) = EditorEngine::export_edited_snapshot(&dyn_img, &save_dir) {
                 println!("[EditorEngine] Exported edited showcase asset to: {:?}", path);
                 ui.set_status_message(format!("Exported to {:?}", path.file_name().unwrap()).into());
@@ -372,7 +440,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Snapshot Handler
-    let active_img_clone = active_image_buffer.clone();
+    let base_img_clone = active_base_image.clone();
+    let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     let i18n_clone = i18n.clone();
     ui.on_take_snapshot(move || {
@@ -382,10 +451,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(path) => {
                 println!("Saved screenshot with watermark to: {:?}", path);
                 if let Ok(rgba) = EditorEngine::load_image(&path) {
+                    stack_clone.lock().unwrap().clear();
                     let slint_img = EditorEngine::rgba_to_slint_image(&rgba);
                     ui.set_canvas_image(slint_img);
                     ui.set_has_canvas_image(true);
-                    *active_img_clone.lock().unwrap() = Some(rgba);
+                    *base_img_clone.lock().unwrap() = Some(rgba);
                 }
                 let msg = i18n_clone.lock().unwrap().t("status_complete");
                 ui.set_status_message(msg.into());
