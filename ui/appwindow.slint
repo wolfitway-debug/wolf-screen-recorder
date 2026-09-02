@@ -115,13 +115,17 @@ export component AppWindow inherits Window {
 
         // ── VIEW 1: MINIMAL SINGLE-ROW TOOLBAR ────────────────────────────────
         if (!root.show-settings-modal && !root.show-editor-modal && !root.show-window-picker) : HorizontalLayout {
-            padding-left: 12px;
-            padding-right: 12px;
-            spacing: 10px;
-            alignment: space-between;
+            width: 100%;
+            height: 100%;
+            padding-left: 16px;
+            padding-right: 16px;
+            spacing: 12px;
+            alignment: center;
 
             // ── LEFT: Brand Icon + Mode Toggle Pill ─────────────────────────
             HorizontalLayout {
+                height: 38px;
+                y: (parent.height - self.height)/2;
                 spacing: 8px;
                 alignment: center;
 
@@ -194,6 +198,7 @@ export component AppWindow inherits Window {
             // ── CENTER: Capture Target Selector ─────────────────────────────
             Rectangle {
                 height: 38px;
+                y: (parent.height - self.height)/2;
                 background: #0f1623;
                 border-radius: 10px;
                 border-width: 1px;
@@ -271,6 +276,8 @@ export component AppWindow inherits Window {
 
             // ── RIGHT: High-Contrast Buttons + Primary Hero CTA ─────────────
             HorizontalLayout {
+                height: 38px;
+                y: (parent.height - self.height)/2;
                 spacing: 8px;
                 alignment: center;
 
