@@ -20,5 +20,12 @@
   "tool_blur": "Blur/Redact",
   "tool_crop": "Crop/Zoom",
   "tool_save": "Save to Disk",
-  "tool_copy": "Copy to Clipboard"
+  "tool_copy": "Copy to Clipboard",
+  "mode_desktop": "Desktop",
+  "mode_window": "Window",
+  "mode_region": "Region",
+  "btn_snapshot": "Snapshot",
+  "btn_record": "Record",
+  "btn_open": "Open",
+  "btn_studio": "Studio"
 }

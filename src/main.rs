@@ -26,6 +26,16 @@ use region::SelectedRegion;
 
 slint::include_modules!();
 
+fn sync_i18n_ui(ui: &AppWindow, i18n: &I18nEngine) {
+    ui.set_txt_mode_desktop(i18n.t("mode_desktop").into());
+    ui.set_txt_mode_window(i18n.t("mode_window").into());
+    ui.set_txt_mode_region(i18n.t("mode_region").into());
+    ui.set_txt_btn_snapshot(i18n.t("btn_snapshot").into());
+    ui.set_txt_btn_record(i18n.t("btn_record").into());
+    ui.set_txt_btn_open(i18n.t("btn_open").into());
+    ui.set_txt_btn_studio(i18n.t("btn_studio").into());
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
 
@@ -55,7 +65,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_hotkey_region(cfg.hotkey_region_select.as_str().into());
         ui.set_hotkey_cancel(cfg.hotkey_cancel.as_str().into());
 
-        i18n.lock().unwrap().set_language(&cfg.language);
+        let mut i18n_lock = i18n.lock().unwrap();
+        i18n_lock.set_language(&cfg.language);
+        sync_i18n_ui(&ui, &i18n_lock);
     }
 
     // Initialize Hardware Auto-Detection Engine
@@ -208,14 +220,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             _ => "en",
         };
         ui.set_lang(next.into());
-        i18n_clone.lock().unwrap().set_language(next);
+        let mut i18n_lock = i18n_clone.lock().unwrap();
+        i18n_lock.set_language(next);
+        sync_i18n_ui(&ui, &i18n_lock);
         config_clone.lock().unwrap().language = next.to_string();
         config_clone.lock().unwrap().save();
 
-        let status_msg = {
-            let i = i18n_clone.lock().unwrap();
-            i.t("status_ready")
-        };
+        let status_msg = i18n_lock.t("status_ready");
         ui.set_status_message(status_msg.into());
     });
 
@@ -227,7 +238,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ui = ui_handle.unwrap();
         let lang_str = lang_code.as_str();
         ui.set_lang(lang_str.into());
-        i18n_clone.lock().unwrap().set_language(lang_str);
+        let mut i18n_lock = i18n_clone.lock().unwrap();
+        i18n_lock.set_language(lang_str);
+        sync_i18n_ui(&ui, &i18n_lock);
         config_clone.lock().unwrap().language = lang_str.to_string();
         config_clone.lock().unwrap().save();
     });

@@ -20,5 +20,12 @@
   "tool_blur": "Cenzurare Blur",
   "tool_crop": "Decupare/Zoom",
   "tool_save": "Salvează pe Disc",
-  "tool_copy": "Copiază în Clipboard"
+  "tool_copy": "Copiază în Clipboard",
+  "mode_desktop": "Ecran",
+  "mode_window": "Fereastră",
+  "mode_region": "Regiune",
+  "btn_snapshot": "Captură",
+  "btn_record": "Înregistrează",
+  "btn_open": "Deschide",
+  "btn_studio": "Studio"
 }
