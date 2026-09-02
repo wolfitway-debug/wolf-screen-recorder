@@ -1,0 +1,134 @@
+export struct WindowItem {
+    title: string,
+    app-name: string,
+    x: int,
+    y: int,
+    width: int,
+    height: int,
+}
+
+export component WindowPickerModal inherits Rectangle {
+    width: 600px;
+    height: 400px;
+    background: #080c14;
+    border-radius: 20px;
+    border-width: 1.5px;
+    border-color: #3b82f6;
+    drop-shadow-blur: 32px;
+    drop-shadow-color: #3b82f635;
+
+    in-out property <[WindowItem]> window-list: [
+        { title: "Google Chrome — Wolfitway", app-name: "Chrome", x: 100, y: 100, width: 1280, height: 800 },
+        { title: "Visual Studio Code — wolf-screen-recorder", app-name: "VSCode", x: 50, y: 50, width: 1400, height: 900 },
+        { title: "Terminal (bash)", app-name: "Terminal", x: 200, y: 200, width: 900, height: 600 },
+    ];
+
+    callback close-window-picker();
+    callback select-target-window(int, int, int, int, string);
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // Header Title Bar
+        HorizontalLayout {
+            alignment: space-between;
+
+            HorizontalLayout {
+                spacing: 8px; alignment: center;
+
+                Text { text: "⊞"; font-size: 18px; color: #38bdf8; vertical-alignment: center; }
+                Text {
+                    text: "SELECT WINDOW TO CAPTURE";
+                    font-size: 13px; font-weight: 900; color: #f8fafc;
+                    vertical-alignment: center;
+                }
+            }
+
+            close_b := Rectangle {
+                width: 30px; height: 30px;
+                background: close_t.has-hover ? #ef4444 : #161e2e;
+                border-radius: 15px;
+                animate background { duration: 100ms; }
+
+                Text { text: "✕"; font-size: 13px; color: #f8fafc; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                close_t := TouchArea { clicked => { root.close-window-picker(); } }
+            }
+        }
+
+        Rectangle { height: 1px; background: #1e293b; }
+
+        Text {
+            text: "Click any running window to lock recording & snapshot capture to it:";
+            font-size: 11px; color: #cbd5e1;
+        }
+
+        // Window List Items Surface
+        Rectangle {
+            background: #0f1623;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #1e293b;
+
+            VerticalLayout {
+                padding: 8px;
+                spacing: 6px;
+
+                for win[idx] in root.window-list : item_card := Rectangle {
+                    height: 48px;
+                    background: item_touch.has-hover ? #1e293b : #161e2e;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: item_touch.has-hover ? #38bdf8 : #26334d;
+                    animate background { duration: 100ms; }
+
+                    HorizontalLayout {
+                        padding-left: 14px; padding-right: 14px;
+                        spacing: 10px; alignment: space-between;
+
+                        HorizontalLayout {
+                            spacing: 10px; alignment: center;
+                            Text { text: "🗔"; font-size: 18px; vertical-alignment: center; color: #38bdf8; }
+
+                            VerticalLayout {
+                                alignment: center; spacing: 2px;
+                                Text {
+                                    text: win.title;
+                                    font-size: 11px; font-weight: 800; color: #f8fafc;
+                                }
+                                Text {
+                                    text: win.app-name + " · " + win.width + " × " + win.height + " px";
+                                    font-size: 9px; color: #cbd5e1;
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            height: 26px;
+                            background: item_touch.has-hover ? #38bdf8 : #1e293b;
+                            border-radius: 6px;
+                            y: (parent.height - self.height)/2;
+
+                            HorizontalLayout {
+                                padding-left: 10px; padding-right: 10px; alignment: center;
+                                Text {
+                                    text: "Select Window";
+                                    font-size: 9px; font-weight: 800;
+                                    color: item_touch.has-hover ? #000000 : #38bdf8;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+
+                    item_touch := TouchArea {
+                        clicked => {
+                            root.select-target-window(win.x, win.y, win.width, win.height, win.title);
+                            root.close-window-picker();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

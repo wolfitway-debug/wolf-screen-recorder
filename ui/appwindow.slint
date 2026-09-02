@@ -1,11 +1,12 @@
 import { SettingsModal } from "settings.slint";
 import { StudioEditor } from "editor.slint";
+import { WindowPickerModal, WindowItem } from "window_picker.slint";
 export { RegionSelectorWindow } from "region_selector.slint";
 export { WebcamPipWindow } from "webcam_pip.slint";
 
 export component AppWindow inherits Window {
-    width: root.show-settings-modal ? 700px : (root.show-editor-modal ? 920px : 820px);
-    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 620px : 60px);
+    width: root.show-settings-modal ? 700px : (root.show-editor-modal ? 920px : (root.show-window-picker ? 640px : 820px));
+    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 620px : (root.show-window-picker ? 420px : 60px));
     no-frame: true;
     background: transparent;
     always-on-top: true;
@@ -31,6 +32,8 @@ export component AppWindow inherits Window {
     in-out property <bool> show-settings-modal: false;
     in-out property <bool> show-editor-modal: false;
     in-out property <bool> show-support-modal: false;
+    in-out property <bool> show-window-picker: false;
+    in-out property <[WindowItem]> window-list;
 
     // Config
     in-out property <string> active-encoder: "Auto";
@@ -49,6 +52,8 @@ export component AppWindow inherits Window {
     callback toggle-audio();
     callback toggle-webcam();
     callback open-region-selector();
+    callback open-window-picker();
+    callback select-target-window(int, int, int, int, string);
     callback toggle-language();
     callback select-language(string);
     callback select-encoder(string);
@@ -68,7 +73,7 @@ export component AppWindow inherits Window {
         width: 100%;
         height: 100%;
         background: #080c14;
-        border-radius: root.show-settings-modal || root.show-editor-modal ? 20px : 16px;
+        border-radius: root.show-settings-modal || root.show-editor-modal || root.show-window-picker ? 20px : 16px;
         border-width: 1.5px;
         border-color: root.is-recording ? #ef444470 : #22d45e30;
         drop-shadow-blur: 28px;
@@ -92,7 +97,7 @@ export component AppWindow inherits Window {
         }
 
         // ── VIEW 1: MINIMAL SINGLE-ROW TOOLBAR ────────────────────────────────
-        if (!root.show-settings-modal && !root.show-editor-modal) : HorizontalLayout {
+        if (!root.show-settings-modal && !root.show-editor-modal && !root.show-window-picker) : HorizontalLayout {
             padding-left: 10px;
             padding-right: 10px;
             spacing: 8px;
@@ -205,7 +210,12 @@ export component AppWindow inherits Window {
                                 vertical-alignment: center;
                             }
                         }
-                        tw_t := TouchArea { clicked => { root.select-mode("window"); } }
+                        tw_t := TouchArea {
+                            clicked => {
+                                root.select-mode("window");
+                                root.open-window-picker();
+                            }
+                        }
                     }
 
                     Rectangle { width: 1px; height: 20px; background: #1e293b; y: (parent.height - self.height)/2; }
@@ -403,6 +413,16 @@ export component AppWindow inherits Window {
                 root.apply-annotation(tool, color, stroke, x1, y1, x2, y2, custom_text);
             }
             save-editor-snapshot => { root.save-editor-export(); }
+        }
+
+        // ── VIEW 4: WINDOW SELECTION PICKER ───────────────────────────────────
+        if (root.show-window-picker) : WindowPickerModal {
+            width: 100%; height: 100%;
+            window-list: root.window-list;
+            close-window-picker => { root.show-window-picker = false; }
+            select-target-window(x, y, w, h, title) => {
+                root.select-target-window(x, y, w, h, title);
+            }
         }
     }
 }

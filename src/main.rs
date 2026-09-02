@@ -148,6 +148,46 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    // Window Picker Handler — queries open windows dynamically
+    let ui_handle = ui.as_weak();
+    ui.on_open_window_picker(move || {
+        let ui = ui_handle.unwrap();
+        ui.set_show_window_picker(true);
+        if let Ok(windows) = xcap::Window::all() {
+            let mut list: Vec<WindowItem> = Vec::new();
+            for win in windows {
+                let title = win.title().to_string();
+                let app = win.app_name().to_string();
+                let x = win.x();
+                let y = win.y();
+                let w = win.width() as i32;
+                let h = win.height() as i32;
+                if w > 50 && h > 50 && !title.is_empty() {
+                    list.push(WindowItem {
+                        title: title.into(),
+                        app_name: app.into(),
+                        x,
+                        y,
+                        width: w,
+                        height: h,
+                    });
+                }
+            }
+            if !list.is_empty() {
+                let model = std::rc::Rc::new(slint::VecModel::from(list));
+                ui.set_window_list(model.into());
+            }
+        }
+    });
+
+    let ui_handle = ui.as_weak();
+    ui.on_select_target_window(move |x, y, w, h, title| {
+        let ui = ui_handle.unwrap();
+        region::set_active_region(Some(SelectedRegion::new(x, y, w as u32, h as u32)));
+        ui.set_status_message(format!("⊞ Window: {}", title).into());
+        ui.set_show_window_picker(false);
+    });
+
     // Language Toggle / Cycle Handler
     let i18n_clone = i18n.clone();
     let config_clone = config.clone();
