@@ -15,6 +15,8 @@ export component SettingsModal inherits Rectangle {
     in-out property <string> active-encoder: "Auto";
     in-out property <string> save-path: "/home/user/Videos";
     in-out property <string> watermark-text: "WOLFITWAY";
+    in-out property <string> watermark-logo-path: "";
+    in-out property <string> watermark-position: "BottomRight";
     in-out property <bool> auto-watermark: true;
     in-out property <bool> cinematic-zoom: true;
     in-out property <bool> show-lang-dropdown: false;
@@ -29,6 +31,8 @@ export component SettingsModal inherits Rectangle {
     callback select-language(string);
     callback select-encoder(string);
     callback save-settings();
+    callback upload-logo-dialog();
+    callback clear-logo();
 
     VerticalLayout {
         padding: 16px;
@@ -157,6 +161,25 @@ export component SettingsModal inherits Rectangle {
                             }
                         }
                         t_sto_t := TouchArea { clicked => { root.active-tab = "storage"; } }
+                    }
+
+                    // Tab 5: Branding & Logo Watermark
+                    t_brand := Rectangle {
+                        height: 38px;
+                        background: root.active-tab == "branding" ? #22d45e : (t_brand_t.has-hover ? #161e2e : transparent);
+                        border-radius: 8px;
+                        animate background { duration: 100ms; }
+
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px; alignment: center;
+                            Text {
+                                text: "🎨 Branding Logo";
+                                font-size: 10px; font-weight: 800;
+                                color: root.active-tab == "branding" ? #000000 : #f8fafc;
+                                vertical-alignment: center;
+                            }
+                        }
+                        t_brand_t := TouchArea { clicked => { root.active-tab = "branding"; } }
                     }
                 }
             }
@@ -410,6 +433,113 @@ export component SettingsModal inherits Rectangle {
                             HorizontalLayout {
                                 padding-left: 12px; padding-right: 12px; alignment: center;
                                 Text { text: root.save-path; font-size: 11px; color: #38bdf8; font-weight: 700; vertical-alignment: center; }
+                            }
+                        }
+                    }
+
+                    // Tab 5: Branding & Custom Logo Watermark
+                    if (root.active-tab == "branding") : VerticalLayout {
+                        spacing: 10px;
+
+                        Text { text: "CUSTOM BRANDING & WATERMARK LOGO"; font-size: 9px; font-weight: 900; color: #38bdf8; }
+                        Text { text: "Upload your own company/creator logo to watermark all snapshots & video recordings:"; font-size: 9px; color: #cbd5e1; }
+
+                        // Logo File Upload Button & Badge
+                        HorizontalLayout {
+                            spacing: 8px;
+
+                            btn_upload_logo := Rectangle {
+                                height: 34px;
+                                background: upload_l_t.has-hover ? #1d4ed8 : #2563eb;
+                                border-radius: 8px;
+                                animate background { duration: 100ms; }
+                                HorizontalLayout {
+                                    padding-left: 12px; padding-right: 12px; alignment: center;
+                                    Text { text: "📁 Browse Custom Logo..."; font-size: 10px; font-weight: 800; color: #ffffff; vertical-alignment: center; }
+                                }
+                                upload_l_t := TouchArea { clicked => { root.upload-logo-dialog(); } }
+                            }
+
+                            if (root.watermark-logo-path != "") : btn_clear_logo := Rectangle {
+                                height: 34px;
+                                background: clear_l_t.has-hover ? #dc2626 : #ef4444;
+                                border-radius: 8px;
+                                animate background { duration: 100ms; }
+                                HorizontalLayout {
+                                    padding-left: 10px; padding-right: 10px; alignment: center;
+                                    Text { text: "✕ Clear Logo"; font-size: 10px; font-weight: 800; color: #ffffff; vertical-alignment: center; }
+                                }
+                                clear_l_t := TouchArea { clicked => { root.clear-logo(); } }
+                            }
+                        }
+
+                        // Logo Path Status Box
+                        Rectangle {
+                            height: 32px;
+                            background: #161e2e;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: #334155;
+                            HorizontalLayout {
+                                padding-left: 10px; padding-right: 10px; alignment: center;
+                                Text {
+                                    text: root.watermark-logo-path == "" ? "No custom logo set (using text watermark banner)" : root.watermark-logo-path;
+                                    font-size: 9px; font-weight: 700;
+                                    color: root.watermark-logo-path == "" ? #94a3b8 : #22d45e;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+
+                        // Corner Placement Selector
+                        Text { text: "CORNER PLACEMENT POSITION"; font-size: 9px; font-weight: 900; color: #38bdf8; }
+                        HorizontalLayout {
+                            spacing: 6px;
+
+                            pos_br := Rectangle {
+                                width: 95px; height: 30px;
+                                background: root.watermark-position == "BottomRight" ? #22d45e : #161e2e;
+                                border-radius: 6px;
+                                Text { text: "Bottom-Right"; font-size: 9px; font-weight: 800; color: root.watermark-position == "BottomRight" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                                TouchArea { clicked => { root.watermark-position = "BottomRight"; } }
+                            }
+
+                            pos_bl := Rectangle {
+                                width: 95px; height: 30px;
+                                background: root.watermark-position == "BottomLeft" ? #22d45e : #161e2e;
+                                border-radius: 6px;
+                                Text { text: "Bottom-Left"; font-size: 9px; font-weight: 800; color: root.watermark-position == "BottomLeft" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                                TouchArea { clicked => { root.watermark-position = "BottomLeft"; } }
+                            }
+
+                            pos_tr := Rectangle {
+                                width: 95px; height: 30px;
+                                background: root.watermark-position == "TopRight" ? #22d45e : #161e2e;
+                                border-radius: 6px;
+                                Text { text: "Top-Right"; font-size: 9px; font-weight: 800; color: root.watermark-position == "TopRight" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                                TouchArea { clicked => { root.watermark-position = "TopRight"; } }
+                            }
+
+                            pos_tl := Rectangle {
+                                width: 95px; height: 30px;
+                                background: root.watermark-position == "TopLeft" ? #22d45e : #161e2e;
+                                border-radius: 6px;
+                                Text { text: "Top-Left"; font-size: 9px; font-weight: 800; color: root.watermark-position == "TopLeft" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                                TouchArea { clicked => { root.watermark-position = "TopLeft"; } }
+                            }
+                        }
+
+                        // Text Watermark Banner Label
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text { text: "Text Watermark Label:"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                            Rectangle {
+                                width: 160px; height: 30px;
+                                background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                LineEdit {
+                                    text: root.watermark-text;
+                                    edited(t) => { root.watermark-text = t; }
+                                }
                             }
                         }
                     }

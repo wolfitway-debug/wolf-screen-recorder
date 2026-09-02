@@ -1,4 +1,4 @@
-use image::{DynamicImage, GenericImageView, Rgba, RgbaImage};
+use image::{DynamicImage, Rgba, RgbaImage};
 use imageproc::drawing::{draw_filled_circle_mut, draw_hollow_circle_mut, draw_hollow_rect_mut, draw_text_mut};
 use imageproc::rect::Rect;
 use ab_glyph::{FontRef, PxScale};
@@ -56,8 +56,15 @@ impl AnnotationEngine {
         // 3. Stamp Custom Image Logo if configured
         if let Some(path) = logo_path {
             if let Ok(logo_img) = image::open(path) {
-                let logo_rgba = logo_img.to_rgba8();
-                let (logo_w, logo_h) = logo_img.dimensions();
+                // Proportional auto-scaling if logo exceeds max bounds (180x70)
+                let resized_logo = if logo_img.width() > 180 || logo_img.height() > 70 {
+                    logo_img.resize(180, 70, image::imageops::FilterType::Triangle)
+                } else {
+                    logo_img
+                };
+
+                let logo_rgba = resized_logo.to_rgba8();
+                let (logo_w, logo_h) = (logo_rgba.width(), logo_rgba.height());
 
                 let (offset_x, offset_y) = Self::calculate_corner_position(
                     img.width(),
@@ -73,8 +80,13 @@ impl AnnotationEngine {
                         let target_y = offset_y + y;
                         if target_x < img.width() && target_y < img.height() {
                             let logo_pixel = logo_rgba.get_pixel(x, y);
-                            if logo_pixel[3] > 10 {
-                                img.put_pixel(target_x, target_y, *logo_pixel);
+                            if logo_pixel[3] > 0 {
+                                let alpha = logo_pixel[3] as f32 / 255.0;
+                                let dst = img.get_pixel_mut(target_x, target_y);
+                                dst[0] = (logo_pixel[0] as f32 * alpha + dst[0] as f32 * (1.0 - alpha)) as u8;
+                                dst[1] = (logo_pixel[1] as f32 * alpha + dst[1] as f32 * (1.0 - alpha)) as u8;
+                                dst[2] = (logo_pixel[2] as f32 * alpha + dst[2] as f32 * (1.0 - alpha)) as u8;
+                                dst[3] = (logo_pixel[3] as f32 * alpha + dst[3] as f32 * (1.0 - alpha)) as u8;
                             }
                         }
                     }
@@ -82,44 +94,46 @@ impl AnnotationEngine {
             }
         }
 
-        // 4. Automated Text Watermarking
-        if let Some(text) = watermark_text {
-            let width = img.width();
-            let height = img.height();
+        // 4. Automated Text Watermarking (if no logo or text requested)
+        if logo_path.is_none() {
+            if let Some(text) = watermark_text {
+                let width = img.width();
+                let height = img.height();
 
-            let (margin_x, margin_y) = Self::calculate_corner_position(
-                width,
-                height,
-                170,
-                26,
-                position,
-            );
+                let (margin_x, margin_y) = Self::calculate_corner_position(
+                    width,
+                    height,
+                    170,
+                    26,
+                    position,
+                );
 
-            let bg_rect = Rect::at(margin_x as i32 - 4, margin_y as i32 - 4).of_size(170, 26);
-            let bg_color = Rgba([18, 22, 30, 200]);
-            
-            for x in bg_rect.left()..bg_rect.right() {
-                for y in bg_rect.top()..bg_rect.bottom() {
-                    if x >= 0 && x < width as i32 && y >= 0 && y < height as i32 {
-                        let pixel = img.get_pixel_mut(x as u32, y as u32);
-                        pixel[0] = ((pixel[0] as u16 + bg_color[0] as u16) / 2) as u8;
-                        pixel[1] = ((pixel[1] as u16 + bg_color[1] as u16) / 2) as u8;
-                        pixel[2] = ((pixel[2] as u16 + bg_color[2] as u16) / 2) as u8;
+                let bg_rect = Rect::at(margin_x as i32 - 4, margin_y as i32 - 4).of_size(170, 26);
+                let bg_color = Rgba([18, 22, 30, 200]);
+
+                for x in bg_rect.left()..bg_rect.right() {
+                    for y in bg_rect.top()..bg_rect.bottom() {
+                        if x >= 0 && x < width as i32 && y >= 0 && y < height as i32 {
+                            let pixel = img.get_pixel_mut(x as u32, y as u32);
+                            pixel[0] = ((pixel[0] as u16 + bg_color[0] as u16) / 2) as u8;
+                            pixel[1] = ((pixel[1] as u16 + bg_color[1] as u16) / 2) as u8;
+                            pixel[2] = ((pixel[2] as u16 + bg_color[2] as u16) / 2) as u8;
+                        }
                     }
                 }
-            }
 
-            let font_data = include_bytes!("assets/Roboto-Regular.ttf");
-            if let Ok(font) = FontRef::try_from_slice(font_data) {
-                draw_text_mut(
-                    img,
-                    Rgba([0, 255, 102, 240]),
-                    margin_x as i32,
-                    margin_y as i32,
-                    PxScale::from(16.0),
-                    &font,
-                    text,
-                );
+                let font_data = include_bytes!("assets/Roboto-Regular.ttf");
+                if let Ok(font) = FontRef::try_from_slice(font_data) {
+                    draw_text_mut(
+                        img,
+                        Rgba([0, 255, 102, 240]),
+                        margin_x as i32,
+                        margin_y as i32,
+                        PxScale::from(16.0),
+                        &font,
+                        text,
+                    );
+                }
             }
         }
     }
@@ -141,7 +155,9 @@ impl AnnotationEngine {
 
     pub fn process_snapshot_with_watermark(
         dyn_img: &mut DynamicImage,
-        watermark: &str,
+        watermark_text: Option<&str>,
+        logo_path: Option<&PathBuf>,
+        position: &str,
     ) {
         let mut rgba = dyn_img.to_rgba8();
         let default_click = ClickAnnotation {
@@ -151,7 +167,7 @@ impl AnnotationEngine {
             color: Rgba([0, 255, 102, 255]),
         };
 
-        Self::apply_annotations(&mut rgba, &[default_click], &[], Some(watermark), None, "BottomRight");
+        Self::apply_annotations(&mut rgba, &[default_click], &[], watermark_text, logo_path, position);
         *dyn_img = DynamicImage::ImageRgba8(rgba);
     }
 }

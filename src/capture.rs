@@ -15,7 +15,11 @@ use crate::annotations::AnnotationEngine;
 pub struct CaptureEngine;
 
 impl CaptureEngine {
-    pub fn save_screenshot(watermark: Option<&str>) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    pub fn save_screenshot(
+        watermark_text: Option<&str>,
+        logo_path: Option<&PathBuf>,
+        position: &str,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let monitors = Monitor::all()?;
         let primary_monitor = monitors.first().ok_or("No primary monitor found")?;
         
@@ -36,8 +40,8 @@ impl CaptureEngine {
             }
         }
 
-        if let Some(wm) = watermark {
-            AnnotationEngine::process_snapshot_with_watermark(&mut dyn_img, wm);
+        if watermark_text.is_some() || logo_path.is_some() {
+            AnnotationEngine::process_snapshot_with_watermark(&mut dyn_img, watermark_text, logo_path, position);
         }
 
         dyn_img.save(&path)?;

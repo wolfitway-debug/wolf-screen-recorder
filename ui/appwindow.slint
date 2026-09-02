@@ -48,6 +48,8 @@ export component AppWindow inherits Window {
     in-out property <string> active-encoder: "Auto";
     in-out property <string> save-path: "/home/user/Videos";
     in-out property <string> watermark-text: "WOLFITWAY";
+    in-out property <string> watermark-logo-path: "";
+    in-out property <string> watermark-position: "BottomRight";
     in-out property <bool> watermark-enabled: true;
     in-out property <bool> cinematic-zoom-enabled: true;
 
@@ -77,6 +79,7 @@ export component AppWindow inherits Window {
     callback save-config();
     callback open-file-dialog();
     callback upload-logo-dialog();
+    callback clear-logo();
     callback copy-clipboard();
     callback undo-annotation();
     callback clear-annotations();
@@ -457,6 +460,8 @@ export component AppWindow inherits Window {
             active-encoder: root.active-encoder;
             save-path: root.save-path;
             watermark-text: root.watermark-text;
+            watermark-logo-path: root.watermark-logo-path;
+            watermark-position: root.watermark-position;
             auto-watermark: root.watermark-enabled;
             cinematic-zoom: root.cinematic-zoom-enabled;
             hotkey-record: root.hotkey-record;
@@ -467,6 +472,8 @@ export component AppWindow inherits Window {
             select-language(l) => { root.select-language(l); }
             select-encoder(e) => { root.select-encoder(e); }
             save-settings => { root.save-config(); }
+            upload-logo-dialog => { root.upload-logo-dialog(); }
+            clear-logo => { root.clear-logo(); }
         }
 
         // ── VIEW 3: STUDIO EDITOR ─────────────────────────────────────────────

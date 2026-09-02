@@ -58,6 +58,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_active_encoder(cfg.hw_encoder_override.as_str().into());
         ui.set_save_path(cfg.save_directory.as_str().into());
         ui.set_watermark_text(cfg.watermark_text.as_str().into());
+        if let Some(logo) = &cfg.watermark_logo_path {
+            ui.set_watermark_logo_path(logo.as_str().into());
+        }
+        ui.set_watermark_position(cfg.watermark_position.as_str().into());
         ui.set_watermark_enabled(cfg.auto_watermark);
         ui.set_cinematic_zoom_enabled(cfg.cinematic_zoom);
         ui.set_hotkey_record(cfg.hotkey_toggle_record.as_str().into());
@@ -305,6 +309,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.hw_encoder_override = ui.get_active_encoder().as_str().to_string();
         cfg.save_directory = ui.get_save_path().as_str().to_string();
         cfg.watermark_text = ui.get_watermark_text().as_str().to_string();
+        let logo_str = ui.get_watermark_logo_path().as_str().to_string();
+        cfg.watermark_logo_path = if logo_str.is_empty() { None } else { Some(logo_str) };
+        cfg.watermark_position = ui.get_watermark_position().as_str().to_string();
         cfg.auto_watermark = ui.get_watermark_enabled();
         cfg.cinematic_zoom = ui.get_cinematic_zoom_enabled();
         cfg.hotkey_toggle_record = ui.get_hotkey_record().as_str().to_string();
@@ -316,14 +323,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Custom Watermark Logo Upload Handler
     let config_clone = config.clone();
+    let ui_handle = ui.as_weak();
     ui.on_upload_logo_dialog(move || {
+        let ui = ui_handle.unwrap();
         if let Some(logo_path) = EditorEngine::pick_logo_file() {
             let path_str = logo_path.to_string_lossy().to_string();
+            ui.set_watermark_logo_path(path_str.as_str().into());
             let mut cfg = config_clone.lock().unwrap();
             cfg.watermark_logo_path = Some(path_str.clone());
             cfg.save();
             println!("[Config] Custom Watermark Logo set to: {}", path_str);
         }
+    });
+
+    // Clear Custom Watermark Logo Handler
+    let config_clone = config.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_clear_logo(move || {
+        let ui = ui_handle.unwrap();
+        ui.set_watermark_logo_path("".into());
+        let mut cfg = config_clone.lock().unwrap();
+        cfg.watermark_logo_path = None;
+        cfg.save();
+        println!("[Config] Custom Watermark Logo cleared.");
     });
 
     // Open External Image File Picker Handler
@@ -387,13 +409,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Open Studio Editor Handler
+    let config_clone = config.clone();
     let base_img_clone = active_base_image.clone();
     let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     ui.on_open_studio_editor(move || {
         let ui = ui_handle.unwrap();
         if base_img_clone.lock().unwrap().is_none() {
-            if let Ok(path) = capture::CaptureEngine::save_screenshot(Some("WOLFITWAY")) {
+            let cfg = config_clone.lock().unwrap();
+            let wm_text = if ui.get_watermark_enabled() { Some(cfg.watermark_text.as_str()) } else { None };
+            let logo_pb = if ui.get_watermark_enabled() { cfg.watermark_logo_path.as_ref().map(std::path::PathBuf::from) } else { None };
+            let pos = cfg.watermark_position.as_str();
+
+            if let Ok(path) = capture::CaptureEngine::save_screenshot(wm_text, logo_pb.as_ref(), pos) {
                 if let Ok(rgba) = EditorEngine::load_image(&path) {
                     stack_clone.lock().unwrap().clear();
                     let slint_img = EditorEngine::rgba_to_slint_image(&rgba);
@@ -620,14 +648,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Snapshot Handler
+    let config_clone = config.clone();
     let base_img_clone = active_base_image.clone();
     let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
     let i18n_clone = i18n.clone();
     ui.on_take_snapshot(move || {
         let ui = ui_handle.unwrap();
-        let wm = if ui.get_watermark_enabled() { Some("WOLFITWAY") } else { None };
-        match capture::CaptureEngine::save_screenshot(wm) {
+        let cfg = config_clone.lock().unwrap();
+        let wm_text = if ui.get_watermark_enabled() { Some(cfg.watermark_text.as_str()) } else { None };
+        let logo_pb = if ui.get_watermark_enabled() { cfg.watermark_logo_path.as_ref().map(std::path::PathBuf::from) } else { None };
+        let pos = cfg.watermark_position.as_str();
+
+        match capture::CaptureEngine::save_screenshot(wm_text, logo_pb.as_ref(), pos) {
             Ok(path) => {
                 println!("Saved screenshot with watermark to: {:?}", path);
                 if let Ok(rgba) = EditorEngine::load_image(&path) {
