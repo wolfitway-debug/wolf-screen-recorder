@@ -564,14 +564,29 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let audio_enabled = ui.get_audio_enabled();
             audio_flag_clone.store(audio_enabled, Ordering::Relaxed);
 
-            let audio_path_result = if audio_enabled {
+            let mic_audio_result = if audio_enabled {
                 match audio::AudioEngine::start_microphone_recording(flag_clone.clone()) {
                     Ok(path) => {
-                        println!("[Main] Audio recording started: {:?}", path);
+                        println!("[Main] Microphone recording started: {:?}", path);
                         Some(path)
                     }
                     Err(e) => {
-                        eprintln!("[Main] Audio capture error: {}", e);
+                        eprintln!("[Main] Microphone capture error: {}", e);
+                        None
+                    }
+                }
+            } else {
+                None
+            };
+
+            let sys_audio_result = if audio_enabled {
+                match audio::AudioEngine::start_system_audio_recording(flag_clone.clone()) {
+                    Ok(path) => {
+                        println!("[Main] System desktop audio recording started: {:?}", path);
+                        Some(path)
+                    }
+                    Err(e) => {
+                        eprintln!("[Main] System audio capture error: {}", e);
                         None
                     }
                 }
@@ -622,62 +637,120 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let mut ffmpeg_cmd = Command::new("ffmpeg");
-                ffmpeg_cmd.arg("-y").arg("-i").arg(temp_video_path.to_str().unwrap());
+                ffmpeg_cmd.arg("-y").arg("-i").arg(temp_video_path.to_str().unwrap()); // Input 0: Video
 
-                if let Some(audio_path) = &audio_path_result {
-                    ffmpeg_cmd.arg("-i").arg(audio_path.to_str().unwrap());
+                let mut next_input_idx = 1;
+                let mic_idx = if let Some(mic_path) = &mic_audio_result {
+                    ffmpeg_cmd.arg("-i").arg(mic_path.to_str().unwrap());
+                    let idx = next_input_idx;
+                    next_input_idx += 1;
+                    Some(idx)
+                } else {
+                    None
+                };
+
+                let sys_idx = if let Some(sys_path) = &sys_audio_result {
+                    ffmpeg_cmd.arg("-i").arg(sys_path.to_str().unwrap());
+                    let idx = next_input_idx;
+                    next_input_idx += 1;
+                    Some(idx)
+                } else {
+                    None
+                };
+
+                let mut logo_idx = None;
+                let mut custom_logo_applied = false;
+                if wm_enabled {
+                    if let Some(logo_p) = &logo_path_opt {
+                        if std::path::Path::new(logo_p).exists() {
+                            ffmpeg_cmd.arg("-i").arg(logo_p);
+                            logo_idx = Some(next_input_idx);
+                            custom_logo_applied = true;
+                        }
+                    }
                 }
 
                 let mut video_filters = Vec::new();
-
                 if cinematic_zoom_enabled {
                     if let Some(vf_zoom) = focus_tracker_thread.build_ffmpeg_zoom_filter(1920, 1080, 1.3) {
                         video_filters.push(vf_zoom);
                     }
                 }
 
-                let mut custom_logo_applied = false;
-                if wm_enabled {
-                    if let Some(logo_p) = &logo_path_opt {
-                        if std::path::Path::new(logo_p).exists() {
-                            let overlay_pos = match pos_opt.as_str() {
-                                "BottomLeft" => "overlay=20:main_h-overlay_h-20",
-                                "TopRight" => "overlay=main_w-overlay_w-20:20",
-                                "TopLeft" => "overlay=20:20",
-                                _ => "overlay=main_w-overlay_w-20:main_h-overlay_h-20",
-                            };
-                            ffmpeg_cmd.arg("-i").arg(logo_p);
-                            ffmpeg_cmd.arg("-filter_complex").arg(format!("[2:v]scale=140:-1[logo];[0:v][logo]{}", overlay_pos));
-                            custom_logo_applied = true;
+                if wm_enabled && !custom_logo_applied && !wm_text.is_empty() {
+                    let (pos_x, pos_y) = match pos_opt.as_str() {
+                        "BottomLeft" => ("20", "h-th-20"),
+                        "TopRight" => ("w-tw-20", "20"),
+                        "TopLeft" => ("20", "20"),
+                        _ => ("w-tw-20", "h-th-20"),
+                    };
+                    let drawtext_vf = format!(
+                        "drawtext=fontfile='/home/dan/development/wolf-screen-recorder/src/assets/Roboto-Regular.ttf':text='{}':fontcolor=0x22d45e:fontsize=22:box=1:boxcolor=0x080c14@0.8:boxborderw=6:x={}:y={}",
+                        wm_text, pos_x, pos_y
+                    );
+                    video_filters.push(drawtext_vf);
+                }
+
+                // Complex filtering for logo overlay and/or dual-audio mixing
+                if custom_logo_applied || (mic_idx.is_some() && sys_idx.is_some()) {
+                    let mut fc = String::new();
+                    let overlay_pos = match pos_opt.as_str() {
+                        "BottomLeft" => "overlay=20:main_h-overlay_h-20",
+                        "TopRight" => "overlay=main_w-overlay_w-20:20",
+                        "TopLeft" => "overlay=20:20",
+                        _ => "overlay=main_w-overlay_w-20:main_h-overlay_h-20",
+                    };
+
+                    let v_in = if !video_filters.is_empty() {
+                        ffmpeg_cmd.arg("-vf").arg(video_filters.join(","));
+                        "0:v"
+                    } else {
+                        "0:v"
+                    };
+
+                    if custom_logo_applied {
+                        if let Some(l_idx) = logo_idx {
+                            fc.push_str(&format!("[{}:v]scale=140:-1[logo];[{}][logo]{}[vout];", l_idx, v_in, overlay_pos));
+                            ffmpeg_cmd.arg("-map").arg("[vout]");
+                        } else {
+                            ffmpeg_cmd.arg("-map").arg("0:v:0");
                         }
+                    } else {
+                        ffmpeg_cmd.arg("-map").arg("0:v:0");
                     }
 
-                    if !custom_logo_applied && !wm_text.is_empty() {
-                        let (pos_x, pos_y) = match pos_opt.as_str() {
-                            "BottomLeft" => ("20", "h-th-20"),
-                            "TopRight" => ("w-tw-20", "20"),
-                            "TopLeft" => ("20", "20"),
-                            _ => ("w-tw-20", "h-th-20"),
-                        };
-                        let drawtext_vf = format!(
-                            "drawtext=fontfile='/home/dan/development/wolf-screen-recorder/src/assets/Roboto-Regular.ttf':text='{}':fontcolor=0x22d45e:fontsize=22:box=1:boxcolor=0x080c14@0.8:boxborderw=6:x={}:y={}",
-                            wm_text, pos_x, pos_y
-                        );
-                        video_filters.push(drawtext_vf);
+                    if let (Some(m_idx), Some(s_idx)) = (mic_idx, sys_idx) {
+                        fc.push_str(&format!("[{}:a][{}:a]amix=inputs=2:duration=first:dropout_transition=2[aout]", m_idx, s_idx));
+                        ffmpeg_cmd.arg("-map").arg("[aout]");
+                    } else if let Some(m_idx) = mic_idx {
+                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", m_idx));
+                    } else if let Some(s_idx) = sys_idx {
+                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", s_idx));
+                    }
+
+                    if !fc.is_empty() {
+                        ffmpeg_cmd.arg("-filter_complex").arg(fc);
+                    }
+                } else {
+                    if !video_filters.is_empty() {
+                        ffmpeg_cmd.arg("-vf").arg(video_filters.join(","));
+                    }
+                    ffmpeg_cmd.arg("-map").arg("0:v:0");
+
+                    if let Some(m_idx) = mic_idx {
+                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", m_idx));
+                    } else if let Some(s_idx) = sys_idx {
+                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", s_idx));
                     }
                 }
 
-                if !custom_logo_applied && !video_filters.is_empty() {
-                    ffmpeg_cmd.arg("-vf").arg(video_filters.join(","));
-                }
-
-                if audio_path_result.is_some() {
+                let has_audio = mic_idx.is_some() || sys_idx.is_some();
+                if has_audio {
                     ffmpeg_cmd.args(&[
                         "-c:v", "libx264",
                         "-preset", "fast",
                         "-c:a", "aac",
                         "-b:a", "192k",
-                        "-af", "aresample=async=1",
                         "-shortest",
                         final_muxed_path.to_str().unwrap(),
                     ]);
@@ -694,8 +767,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match status {
                     Ok(s) if s.success() => {
                         let _ = std::fs::remove_file(temp_video_path);
-                        if let Some(audio_path) = audio_path_result {
-                            let _ = std::fs::remove_file(audio_path);
+                        if let Some(mic_path) = mic_audio_result {
+                            let _ = std::fs::remove_file(mic_path);
+                        }
+                        if let Some(sys_path) = sys_audio_result {
+                            let _ = std::fs::remove_file(sys_path);
                         }
 
                         let ui_weak = ui_handle_thread.clone();

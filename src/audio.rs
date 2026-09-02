@@ -125,4 +125,65 @@ impl AudioEngine {
 
         Ok(wav_output_path)
     }
+
+    pub fn start_system_audio_recording(
+        is_recording_flag: Arc<AtomicBool>,
+    ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+        let mut audio_path = dirs::audio_dir().unwrap_or_else(|| PathBuf::from("."));
+        audio_path.push("WolfRecordings");
+        fs::create_dir_all(&audio_path)?;
+        let wav_output_path = audio_path.join(format!("temp_system_audio_{}.wav", chrono::Utc::now().timestamp()));
+        let wav_path_clone = wav_output_path.clone();
+
+        thread::spawn(move || {
+            let pulse_arg = if cfg!(target_os = "macos") {
+                vec!["-f", "avfoundation", "-i", ":0"]
+            } else if cfg!(target_os = "windows") {
+                vec!["-f", "dshow", "-i", "audio=virtual-audio-capturer"]
+            } else {
+                vec!["-f", "pulse", "-i", "default"]
+            };
+
+            let mut ffmpeg_cmd = std::process::Command::new("ffmpeg");
+            ffmpeg_cmd.arg("-y");
+            for arg in pulse_arg {
+                ffmpeg_cmd.arg(arg);
+            }
+            ffmpeg_cmd.args(&[
+                "-ac", "2",
+                "-ar", "44100",
+                wav_path_clone.to_str().unwrap(),
+            ]);
+
+            let mut child = match ffmpeg_cmd
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[AudioEngine] Failed to spawn system audio capture: {}", e);
+                    return;
+                }
+            };
+
+            while is_recording_flag.load(Ordering::Relaxed) {
+                thread::sleep(Duration::from_millis(50));
+            }
+
+            #[cfg(unix)]
+            let _ = std::process::Command::new("kill")
+                .arg("-INT")
+                .arg(child.id().to_string())
+                .status();
+
+            #[cfg(not(unix))]
+            let _ = child.kill();
+
+            let _ = child.wait();
+            println!("[AudioEngine] System audio track saved to {:?}", wav_path_clone);
+        });
+
+        Ok(wav_output_path)
+    }
 }
