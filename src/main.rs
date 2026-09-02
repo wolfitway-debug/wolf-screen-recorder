@@ -16,7 +16,6 @@ use hardware::HardwareProfile;
 use focus::FocusTracker;
 use config::AppConfig;
 use i18n::I18nEngine;
-use editor::EditorEngine;
 
 slint::include_modules!();
 

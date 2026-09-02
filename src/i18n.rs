@@ -47,6 +47,7 @@ impl I18nEngine {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_language(&self) -> &str {
         &self.active_lang
     }
