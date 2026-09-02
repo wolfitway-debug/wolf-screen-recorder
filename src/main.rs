@@ -22,6 +22,7 @@ use config::AppConfig;
 use i18n::I18nEngine;
 use editor::{AnnotationShape, AnnotationStack, EditorEngine, parse_color_hex, stroke_size_to_px};
 use hotkeys::{HotkeyCommand, HotkeyDaemon};
+use region::SelectedRegion;
 
 slint::include_modules!();
 
@@ -31,6 +32,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Active image buffer & annotation stack for Studio Editor
     let active_base_image: Arc<Mutex<Option<RgbaImage>>> = Arc::new(Mutex::new(None));
     let active_annotation_stack: Arc<Mutex<AnnotationStack>> = Arc::new(Mutex::new(AnnotationStack::default()));
+
+    // Active PIP webcam window handle
+    let active_pip_window: Arc<Mutex<Option<WebcamPipWindow>>> = Arc::new(Mutex::new(None));
 
     // Load persistent configuration and i18n localization engine
     let config = Arc::new(Mutex::new(AppConfig::load()));
@@ -53,7 +57,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize Hardware Auto-Detection Engine
     let hw_profile = HardwareProfile::detect();
     ui.set_hw_encoder_tag(hw_profile.encoder.tag().into());
-    
+
     let initial_status = {
         let i = i18n.lock().unwrap();
         format!("{} ({})", i.t("status_ready"), hw_profile.encoder.display_name())
@@ -82,7 +86,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             ui.invoke_open_studio_editor();
                         }
                         HotkeyCommand::RegionSelect => {
-                            ui.set_selected_mode("region".into());
+                            ui.invoke_open_region_selector();
                         }
                         HotkeyCommand::Cancel => {
                             ui.set_show_settings_modal(false);
@@ -114,6 +118,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let new_x = current_pos.x + (delta_x as i32);
         let new_y = current_pos.y + (delta_y as i32);
         ui.window().set_position(slint::PhysicalPosition::new(new_x, new_y));
+    });
+
+    // Fullscreen Rubber-Band Region Selector Handler
+    let ui_handle = ui.as_weak();
+    ui.on_open_region_selector(move || {
+        let ui = ui_handle.unwrap();
+        ui.set_selected_mode("region".into());
+
+        if let Ok(region_win) = RegionSelectorWindow::new() {
+            let region_win_weak = region_win.as_weak();
+
+            region_win.on_selection_confirmed(move |x, y, w, h| {
+                region::set_active_region(Some(SelectedRegion::new(x, y, w as u32, h as u32)));
+                if let Some(r_win) = region_win_weak.upgrade() {
+                    let _ = r_win.hide();
+                }
+            });
+
+            let region_win_cancel_weak = region_win.as_weak();
+            region_win.on_selection_cancelled(move || {
+                region::set_active_region(None);
+                if let Some(r_win) = region_win_cancel_weak.upgrade() {
+                    let _ = r_win.hide();
+                }
+            });
+
+            let _ = region_win.show();
+        }
     });
 
     // Language Toggle / Cycle Handler
@@ -277,16 +309,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_show_editor_modal(true);
     });
 
-    // Unified Annotation Dispatch Handler — routes all 8 tool types
+    // Unified Annotation Dispatch Handler — routes all 8 tool types with custom text parameter
     let base_img_clone = active_base_image.clone();
     let stack_clone = active_annotation_stack.clone();
     let ui_handle = ui.as_weak();
-    ui.on_apply_annotation(move |tool, color_hex, stroke_idx, x1, y1, x2, y2| {
+    ui.on_apply_annotation(move |tool, color_hex, stroke_idx, x1, y1, x2, y2, custom_text| {
         let ui = ui_handle.unwrap();
         let color = parse_color_hex(color_hex.as_str());
         let stroke_px = stroke_size_to_px(stroke_idx);
 
-        // Normalize coordinates so x1/y1 is always top-left
         let (lx, ly, rx, ry) = (
             x1.min(x2), y1.min(y2),
             x1.max(x2), y1.max(y2),
@@ -314,7 +345,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
             "text" => AnnotationShape::TextCallout {
                 x: x1, y: y1,
-                text: "Label".to_string(),
+                text: if custom_text.is_empty() { "Callout".to_string() } else { custom_text.as_str().to_string() },
                 color,
             },
             "step" => {
@@ -326,15 +357,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             },
             "pen" => AnnotationShape::Freehand {
-                start: (x1 as f32, y1 as f32),
-                end: (x2 as f32, y2 as f32),
+                points: vec![(x1 as f32, y1 as f32), (x2 as f32, y2 as f32)],
                 color,
                 stroke: stroke_px,
             },
             "spotlight" => AnnotationShape::Spotlight {
                 x: lx, y: ly, width: w, height: h,
             },
-            _ => return, // unknown tool — skip
+            _ => return,
         };
 
         stack_clone.lock().unwrap().push(shape);
@@ -534,8 +564,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         audio_flag_main.store(next, Ordering::Relaxed);
     });
 
+    // Floating Webcam PIP Window Toggle Handler
     let webcam_flag = Arc::new(AtomicBool::new(false));
     let webcam_flag_clone = webcam_flag.clone();
+    let pip_win_clone = active_pip_window.clone();
     let ui_handle = ui.as_weak();
     ui.on_toggle_webcam(move || {
         let ui = ui_handle.unwrap();
@@ -543,8 +575,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let next = !current;
         ui.set_webcam_enabled(next);
         webcam_flag_clone.store(next, Ordering::Relaxed);
+
         if next {
             webcam::WebcamEngine::start_feed(webcam_flag_clone.clone());
+            if let Ok(pip_win) = WebcamPipWindow::new() {
+                let pip_weak = pip_win.as_weak();
+                pip_win.on_move_window(move |delta_x, delta_y| {
+                    if let Some(pip) = pip_weak.upgrade() {
+                        let cur_pos = pip.window().position();
+                        let new_x = cur_pos.x + delta_x as i32;
+                        let new_y = cur_pos.y + delta_y as i32;
+                        pip.window().set_position(slint::PhysicalPosition::new(new_x, new_y));
+                    }
+                });
+
+                let pip_close_weak = pip_win.as_weak();
+                let ui_close_weak = ui.as_weak();
+                let flag_close_clone = webcam_flag.clone();
+                pip_win.on_close_pip(move || {
+                    flag_close_clone.store(false, Ordering::Relaxed);
+                    if let Some(ui) = ui_close_weak.upgrade() {
+                        ui.set_webcam_enabled(false);
+                    }
+                    if let Some(pip) = pip_close_weak.upgrade() {
+                        let _ = pip.hide();
+                    }
+                });
+
+                let _ = pip_win.show();
+                *pip_win_clone.lock().unwrap() = Some(pip_win);
+            }
+        } else if let Some(pip) = pip_win_clone.lock().unwrap().take() {
+            let _ = pip.hide();
         }
     });
 

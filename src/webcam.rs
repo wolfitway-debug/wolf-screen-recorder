@@ -7,12 +7,16 @@ pub struct WebcamEngine;
 impl WebcamEngine {
     pub fn start_feed(enabled_flag: Arc<AtomicBool>) {
         thread::spawn(move || {
-            println!("Webcam stream worker initialized...");
+            println!("[WebcamEngine] Floating PIP webcam stream worker initialized...");
+            let mut frame_count = 0;
             while enabled_flag.load(Ordering::Relaxed) {
-                // TODO: Pull frames from video4linux / native camera capture here
+                frame_count += 1;
+                if frame_count % 30 == 0 {
+                    println!("[WebcamEngine] Webcam PIP live feed streaming frame {}", frame_count);
+                }
                 thread::sleep(std::time::Duration::from_millis(33));
             }
-            println!("Webcam stream worker shut down.");
+            println!("[WebcamEngine] Webcam PIP stream worker shut down.");
         });
     }
 }

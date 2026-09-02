@@ -1,6 +1,8 @@
+import { LineEdit } from "std-widgets.slint";
+
 export component StudioEditor inherits Rectangle {
-    width: 900px;
-    height: 600px;
+    width: 920px;
+    height: 620px;
     background: #080c14;
     border-radius: 20px;
     border-width: 1.5px;
@@ -11,12 +13,18 @@ export component StudioEditor inherits Rectangle {
     // Core state
     in-out property <string> active-tool: "arrow";
     in-out property <string> active-color: "#FF3B30";
-    in-out property <int> stroke-size: 2;   // 1=thin, 2=normal, 3=thick
+    in-out property <int> stroke-size: 2;
     in-out property <image> canvas-image;
     in-out property <bool> has-canvas-image: false;
     in-out property <bool> watermark-active: true;
-    in-out property <string> status-text: "Select a tool and draw on the canvas";
-    in-out property <int> current-step: 1;  // next step number to place
+    in-out property <string> status-text: "Select a tool and drag to draw on canvas";
+    in-out property <int> current-step: 1;
+
+    // Interactive Text Input Popover state
+    in-out property <bool> show-text-modal: false;
+    in-out property <string> custom-text-input: "Callout";
+    in-out property <int> pending-text-x: 0;
+    in-out property <int> pending-text-y: 0;
 
     // Live drag preview state
     in-out property <bool> drag-active: false;
@@ -34,7 +42,7 @@ export component StudioEditor inherits Rectangle {
     callback copy-clipboard();
     callback undo-annotation();
     callback clear-annotations();
-    callback apply-annotation(string, string, int, int, int, int, int);
+    callback apply-annotation(string, string, int, int, int, int, int, string);
     callback save-editor-snapshot();
 
     VerticalLayout {
@@ -43,40 +51,33 @@ export component StudioEditor inherits Rectangle {
 
         // ── TOP HEADER BAR ────────────────────────────────────────────────────
         Rectangle {
-            height: 50px;
+            height: 52px;
             background: #0b1120;
-            border-radius: 0px;
 
             HorizontalLayout {
                 padding-left: 16px;
                 padding-right: 16px;
                 alignment: space-between;
 
-                // Left: Brand + subtitle
                 HorizontalLayout {
                     spacing: 12px;
                     alignment: center;
 
-                    Text {
-                        text: "🎨";
-                        font-size: 18px;
-                        vertical-alignment: center;
-                    }
+                    Text { text: "🎨"; font-size: 18px; vertical-alignment: center; }
 
                     VerticalLayout {
                         alignment: center;
                         spacing: 1px;
                         Text {
                             text: "SHOWCASE CREATIVE STUDIO";
-                            font-size: 11px; font-weight: 900; color: #f1f5f9;
+                            font-size: 12px; font-weight: 900; color: #f8fafc;
                         }
                         Text {
                             text: root.status-text;
-                            font-size: 9px; color: #64748b;
+                            font-size: 9px; font-weight: 600; color: #cbd5e1;
                         }
                     }
 
-                    // Step counter badge
                     if (root.active-tool == "step") : Rectangle {
                         height: 24px;
                         background: #22d45e;
@@ -85,7 +86,7 @@ export component StudioEditor inherits Rectangle {
                         HorizontalLayout {
                             padding-left: 10px; padding-right: 10px; alignment: center;
                             Text {
-                                text: "Next: ①②③  Step " + root.current-step;
+                                text: "Next Step: " + root.current-step;
                                 font-size: 9px; font-weight: 900; color: #000000;
                                 vertical-alignment: center;
                             }
@@ -93,13 +94,12 @@ export component StudioEditor inherits Rectangle {
                     }
                 }
 
-                // Right: Action Buttons
                 HorizontalLayout {
                     spacing: 8px;
                     alignment: center;
 
                     wm_toggle := Rectangle {
-                        height: 30px;
+                        height: 32px;
                         background: root.watermark-active ? #3b82f6 : (wm_t.has-hover ? #1e293b : #161e2e);
                         border-radius: 8px;
                         border-width: 1px;
@@ -110,8 +110,7 @@ export component StudioEditor inherits Rectangle {
                             padding-left: 10px; padding-right: 10px; alignment: center;
                             Text {
                                 text: root.watermark-active ? "🏷️ Brand ON" : "🏷️ Brand OFF";
-                                font-size: 9px; font-weight: 800;
-                                color: #ffffff;
+                                font-size: 9px; font-weight: 800; color: #ffffff;
                                 vertical-alignment: center;
                             }
                         }
@@ -119,7 +118,7 @@ export component StudioEditor inherits Rectangle {
                     }
 
                     open_hdr := Rectangle {
-                        height: 30px;
+                        height: 32px;
                         background: open_hdr_t.has-hover ? #1e293b : #161e2e;
                         border-radius: 8px;
                         border-width: 1px;
@@ -138,14 +137,14 @@ export component StudioEditor inherits Rectangle {
                     }
 
                     close_hdr := Rectangle {
-                        width: 30px; height: 30px;
-                        background: close_hdr_t.has-hover ? #1e293b : #161e2e;
-                        border-radius: 15px;
+                        width: 32px; height: 32px;
+                        background: close_hdr_t.has-hover ? #ef4444 : #161e2e;
+                        border-radius: 16px;
                         animate background { duration: 100ms; }
 
                         Text {
                             text: "✕";
-                            font-size: 14px; color: #94a3b8;
+                            font-size: 14px; color: #f8fafc;
                             x: (parent.width - self.width)/2;
                             y: (parent.height - self.height)/2;
                         }
@@ -155,13 +154,10 @@ export component StudioEditor inherits Rectangle {
             }
         }
 
-        // ── CANVAS AREA (fills all remaining space) ───────────────────────────
+        // ── CANVAS AREA ───────────────────────────────────────────────────────
         canvas_box := Rectangle {
             background: #050810;
-            border-radius: 0px;
-            border-width: 0px;
 
-            // Image content
             if (root.has-canvas-image) : Image {
                 source: root.canvas-image;
                 width: 100%;
@@ -169,31 +165,30 @@ export component StudioEditor inherits Rectangle {
                 image-fit: contain;
             }
 
-            // Beautiful empty state card
             if (!root.has-canvas-image) : Rectangle {
-                width: 320px; height: 200px;
+                width: 340px; height: 210px;
                 background: #0f1623;
                 border-radius: 20px;
-                border-width: 1px;
+                border-width: 1.5px;
                 border-color: #1e293b;
                 x: (parent.width - self.width) / 2;
                 y: (parent.height - self.height) / 2;
 
                 VerticalLayout {
                     alignment: center; spacing: 12px;
-                    Text { text: "✨"; font-size: 40px; horizontal-alignment: center; }
+                    Text { text: "✨"; font-size: 44px; horizontal-alignment: center; }
                     Text {
-                        text: "No image loaded";
-                        font-size: 14px; font-weight: 800; color: #f1f5f9;
+                        text: "No Image Loaded";
+                        font-size: 15px; font-weight: 800; color: #f8fafc;
                         horizontal-alignment: center;
                     }
                     Text {
-                        text: "Open a file or take a snapshot\nto start annotating";
-                        font-size: 11px; color: #64748b;
+                        text: "Open a screenshot file or take a snapshot\nto start annotating assets.";
+                        font-size: 11px; color: #cbd5e1;
                         horizontal-alignment: center;
                     }
                     Rectangle {
-                        height: 34px; width: 160px;
+                        height: 36px; width: 170px;
                         x: (parent.width - self.width) / 2;
                         background: open_empty_t.has-hover ? #16a34a : #22d45e;
                         border-radius: 10px;
@@ -201,7 +196,7 @@ export component StudioEditor inherits Rectangle {
                         HorizontalLayout {
                             alignment: center;
                             Text {
-                                text: "📂 Open Image";
+                                text: "📂 Open Image File";
                                 font-size: 11px; font-weight: 900; color: #000000;
                                 vertical-alignment: center;
                             }
@@ -211,7 +206,7 @@ export component StudioEditor inherits Rectangle {
                 }
             }
 
-            // ── LIVE DRAG PREVIEW OVERLAY ──────────────────────────────────────
+            // Live Drag Preview Rect/Oval/Spotlight/Blur
             if (root.drag-active && (root.active-tool == "rect" || root.active-tool == "blur" || root.active-tool == "spotlight")) : Rectangle {
                 x: (root.drag-x1 < root.drag-x2 ? root.drag-x1 : root.drag-x2) * 1px;
                 y: (root.drag-y1 < root.drag-y2 ? root.drag-y1 : root.drag-y2) * 1px;
@@ -223,7 +218,6 @@ export component StudioEditor inherits Rectangle {
                 border-radius: root.active-tool == "rect" ? 4px : 0px;
             }
 
-            // Oval preview
             if (root.drag-active && root.active-tool == "oval") : Rectangle {
                 x: (root.drag-x1 < root.drag-x2 ? root.drag-x1 : root.drag-x2) * 1px;
                 y: (root.drag-y1 < root.drag-y2 ? root.drag-y1 : root.drag-y2) * 1px;
@@ -235,291 +229,245 @@ export component StudioEditor inherits Rectangle {
                 border-radius: 9999px;
             }
 
-            // Arrow/Freehand preview: thin line from start to current
             if (root.drag-active && (root.active-tool == "arrow" || root.active-tool == "pen")) : Rectangle {
                 x: (root.drag-x1 < root.drag-x2 ? root.drag-x1 : root.drag-x2) * 1px;
                 y: (root.drag-y1 < root.drag-y2 ? root.drag-y1 : root.drag-y2) * 1px;
                 width: (root.drag-x2 - root.drag-x1 > 0 ? root.drag-x2 - root.drag-x1 : root.drag-x1 - root.drag-x2) * 1px;
                 height: 2px;
-                background: #f59e0b60;
-                border-radius: 1px;
+                background: #f59e0b;
             }
 
-            // Step placement preview dot
-            if (root.drag-active && root.active-tool == "step") : Rectangle {
-                x: root.drag-x2 * 1px - 16px;
-                y: root.drag-y2 * 1px - 16px;
-                width: 32px; height: 32px;
-                background: #22d45e;
-                border-radius: 16px;
-                border-width: 2px;
-                border-color: #ffffff;
-                HorizontalLayout {
-                    alignment: center;
-                    Text {
-                        text: root.current-step;
-                        font-size: 12px; font-weight: 900; color: #000000;
-                        vertical-alignment: center;
+            // Interactive Text Callout Input Modal Popover
+            if (root.show-text-modal) : Rectangle {
+                width: 280px; height: 110px;
+                x: (parent.width - self.width)/2;
+                y: (parent.height - self.height)/2;
+                background: #080c14f5;
+                border-radius: 12px;
+                border-width: 1.5px;
+                border-color: #3b82f6;
+                drop-shadow-blur: 24px;
+                drop-shadow-color: #000000a0;
+
+                VerticalLayout {
+                    padding: 12px; spacing: 8px;
+                    Text { text: "🔤 Enter Callout Label Text:"; font-size: 10px; font-weight: 800; color: #f8fafc; }
+                    LineEdit {
+                        text: root.custom-text-input;
+                        edited(t) => { root.custom-text-input = t; }
+                    }
+                    HorizontalLayout {
+                        spacing: 8px; alignment: end;
+                        Rectangle {
+                            height: 28px; background: #1e293b; border-radius: 6px;
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "Cancel"; font-size: 9px; font-weight: 800; color: #cbd5e1; vertical-alignment: center; } }
+                            TouchArea { clicked => { root.show-text-modal = false; } }
+                        }
+                        Rectangle {
+                            height: 28px; background: #3b82f6; border-radius: 6px;
+                            HorizontalLayout { padding-left: 12px; padding-right: 12px; alignment: center; Text { text: "Apply Text"; font-size: 9px; font-weight: 900; color: #ffffff; vertical-alignment: center; } }
+                            TouchArea {
+                                clicked => {
+                                    root.show-text-modal = false;
+                                    root.apply-annotation(
+                                        "text",
+                                        root.active-color,
+                                        root.stroke-size,
+                                        root.pending-text-x,
+                                        root.pending-text-y,
+                                        root.pending-text-x + 10,
+                                        root.pending-text-y + 10,
+                                        root.custom-text-input
+                                    );
+                                }
+                            }
+                        }
                     }
                 }
             }
 
-            // ── CANVAS TOUCH AREA (captures all interaction) ──────────────────
+            // Canvas Interaction Handler
             canvas_touch := TouchArea {
                 property <int> start-x;
                 property <int> start-y;
 
-                mouse-cursor: root.active-tool == "text" || root.active-tool == "step" ? MouseCursor.default : MouseCursor.crosshair;
+                mouse-cursor: root.active-tool == "text" ? MouseCursor.default : MouseCursor.crosshair;
 
                 pointer-event(event) => {
                     if (event.button == PointerEventButton.left) {
                         if (event.kind == PointerEventKind.down) {
                             self.start-x = self.mouse-x / 1px;
                             self.start-y = self.mouse-y / 1px;
-                            root.drag-active = true;
-                            root.drag-x1 = self.start-x;
-                            root.drag-y1 = self.start-y;
-                            root.drag-x2 = self.start-x;
-                            root.drag-y2 = self.start-y;
+
+                            if (root.active-tool == "text") {
+                                root.pending-text-x = self.start-x;
+                                root.pending-text-y = self.start-y;
+                                root.show-text-modal = true;
+                            } else {
+                                root.drag-active = true;
+                                root.drag-x1 = self.start-x;
+                                root.drag-y1 = self.start-y;
+                                root.drag-x2 = self.start-x;
+                                root.drag-y2 = self.start-y;
+                            }
                         } else if (event.kind == PointerEventKind.up) {
-                            root.drag-active = false;
-                            let ex = self.mouse-x / 1px;
-                            let ey = self.mouse-y / 1px;
-                            root.apply-annotation(
-                                root.active-tool,
-                                root.active-color,
-                                root.stroke-size,
-                                self.start-x,
-                                self.start-y,
-                                ex,
-                                ey
-                            );
+                            if (root.drag-active) {
+                                root.drag-active = false;
+                                let ex = self.mouse-x / 1px;
+                                let ey = self.mouse-y / 1px;
+                                root.apply-annotation(
+                                    root.active-tool,
+                                    root.active-color,
+                                    root.stroke-size,
+                                    self.start-x,
+                                    self.start-y,
+                                    ex,
+                                    ey,
+                                    ""
+                                );
+                            }
                         }
                     }
                 }
 
                 moved => {
-                    root.drag-x2 = self.mouse-x / 1px;
-                    root.drag-y2 = self.mouse-y / 1px;
+                    if (root.drag-active) {
+                        root.drag-x2 = self.mouse-x / 1px;
+                        root.drag-y2 = self.mouse-y / 1px;
+                    }
                 }
             }
         }
 
-        // ── ANNOTATION TOOLBAR (BOTTOM — Awesome Screenshot style) ────────────
+        // ── BOTTOM ANNOTATION TOOLBAR ─────────────────────────────────────────
         Rectangle {
-            height: 106px;
+            height: 108px;
             background: #0b1120;
-            border-radius: 0px;
 
             VerticalLayout {
                 padding: 8px;
                 spacing: 6px;
 
-                // ── Row 1: Tool Buttons ──────────────────────────────────────
+                // Tool Selector Strip
                 HorizontalLayout {
                     spacing: 6px;
                     alignment: center;
 
-                    // Pen / Freehand
                     pen_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "pen" ? #22d45e : (pen_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "pen" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "pen" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
-                            Text { text: "✏"; font-size: 15px; vertical-alignment: center; }
-                            Text {
-                                text: "Pen";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "pen" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "✏"; font-size: 15px; vertical-alignment: center; color: root.active-tool == "pen" ? #000 : #f8fafc; }
+                            Text { text: "Pen"; font-size: 10px; font-weight: 800; color: root.active-tool == "pen" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
                         pen_t := TouchArea { clicked => { root.select-tool("pen"); root.status-text = "Drag to draw freehand strokes"; } }
                     }
 
-                    // Arrow
                     arrow_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "arrow" ? #22d45e : (arrow_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "arrow" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "arrow" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
-                            Text { text: "→"; font-size: 16px; vertical-alignment: center; color: root.active-tool == "arrow" ? #000000 : #94a3b8; }
-                            Text {
-                                text: "Arrow";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "arrow" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "→"; font-size: 16px; color: root.active-tool == "arrow" ? #000 : #f8fafc; vertical-alignment: center; }
+                            Text { text: "Arrow"; font-size: 10px; font-weight: 800; color: root.active-tool == "arrow" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
                         arrow_t := TouchArea { clicked => { root.select-tool("arrow"); root.status-text = "Drag to draw directional arrows"; } }
                     }
 
-                    // Rectangle
                     rect_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "rect" ? #22d45e : (rect_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "rect" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "rect" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
-                            Text { text: "▭"; font-size: 15px; vertical-alignment: center; color: root.active-tool == "rect" ? #000000 : #94a3b8; }
-                            Text {
-                                text: "Rect";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "rect" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "▭"; font-size: 15px; color: root.active-tool == "rect" ? #000 : #f8fafc; vertical-alignment: center; }
+                            Text { text: "Rect"; font-size: 10px; font-weight: 800; color: root.active-tool == "rect" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
-                        rect_t := TouchArea { clicked => { root.select-tool("rect"); root.status-text = "Drag to draw highlight rectangles"; } }
+                        rect_t := TouchArea { clicked => { root.select-tool("rect"); root.status-text = "Drag to draw highlight boxes"; } }
                     }
 
-                    // Oval
                     oval_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "oval" ? #22d45e : (oval_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "oval" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "oval" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
-                            Text { text: "○"; font-size: 16px; vertical-alignment: center; color: root.active-tool == "oval" ? #000000 : #94a3b8; }
-                            Text {
-                                text: "Oval";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "oval" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "○"; font-size: 16px; color: root.active-tool == "oval" ? #000 : #f8fafc; vertical-alignment: center; }
+                            Text { text: "Oval"; font-size: 10px; font-weight: 800; color: root.active-tool == "oval" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
-                        oval_t := TouchArea { clicked => { root.select-tool("oval"); root.status-text = "Drag to draw ellipses and circles"; } }
+                        oval_t := TouchArea { clicked => { root.select-tool("oval"); root.status-text = "Drag to draw circles and ellipses"; } }
                     }
 
-                    // Text Callout
                     text_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "text" ? #22d45e : (text_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "text" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "text" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
-                            Text { text: "T"; font-size: 16px; font-weight: 900; vertical-alignment: center; color: root.active-tool == "text" ? #000000 : #94a3b8; }
-                            Text {
-                                text: "Text";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "text" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "T"; font-size: 16px; font-weight: 900; color: root.active-tool == "text" ? #000 : #f8fafc; vertical-alignment: center; }
+                            Text { text: "Text"; font-size: 10px; font-weight: 800; color: root.active-tool == "text" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
-                        text_t := TouchArea { clicked => { root.select-tool("text"); root.status-text = "Click to place a text callout label"; } }
+                        text_t := TouchArea { clicked => { root.select-tool("text"); root.status-text = "Click canvas to type custom callout text"; } }
                     }
 
-                    // Step Number
                     step_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "step" ? #22d45e : (step_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "step" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "step" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
                             Rectangle {
-                                width: 20px; height: 20px;
-                                background: root.active-tool == "step" ? #000000 : #22d45e;
-                                border-radius: 10px;
-                                Text {
-                                    text: root.current-step;
-                                    font-size: 10px; font-weight: 900;
-                                    color: root.active-tool == "step" ? #22d45e : #000000;
-                                    x: (parent.width - self.width)/2;
-                                    y: (parent.height - self.height)/2;
-                                }
+                                width: 20px; height: 20px; background: root.active-tool == "step" ? #000000 : #22d45e; border-radius: 10px;
+                                Text { text: root.current-step; font-size: 10px; font-weight: 900; color: root.active-tool == "step" ? #22d45e : #000000; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
                             }
-                            Text {
-                                text: "Step";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "step" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "Step"; font-size: 10px; font-weight: 800; color: root.active-tool == "step" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
-                        step_t := TouchArea { clicked => { root.select-tool("step"); root.status-text = "Click to place step numbers ①②③"; } }
+                        step_t := TouchArea { clicked => { root.select-tool("step"); root.status-text = "Click to place sequential step bubbles"; } }
                     }
 
-                    // Blur / Redact
                     blur_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "blur" ? #22d45e : (blur_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "blur" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "blur" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
-                            Text { text: "▓"; font-size: 15px; vertical-alignment: center; color: root.active-tool == "blur" ? #000000 : #94a3b8; }
-                            Text {
-                                text: "Blur";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "blur" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "▓"; font-size: 15px; color: root.active-tool == "blur" ? #000 : #f8fafc; vertical-alignment: center; }
+                            Text { text: "Blur"; font-size: 10px; font-weight: 800; color: root.active-tool == "blur" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
-                        blur_t := TouchArea { clicked => { root.select-tool("blur"); root.status-text = "Drag to redact / pixelate private areas"; } }
+                        blur_t := TouchArea { clicked => { root.select-tool("blur"); root.status-text = "Drag to redact confidential information"; } }
                     }
 
-                    // Spotlight
                     spot_btn := Rectangle {
                         width: 76px; height: 38px;
                         background: root.active-tool == "spotlight" ? #22d45e : (spot_t.has-hover ? #1e293b : #161e2e);
-                        border-radius: 10px;
-                        border-width: 1px;
-                        border-color: root.active-tool == "spotlight" ? #22d45e : #2a3a52;
+                        border-radius: 10px; border-width: 1px; border-color: root.active-tool == "spotlight" ? #22d45e : #334155;
                         animate background { duration: 100ms; }
-
                         HorizontalLayout {
                             spacing: 5px; alignment: center;
-                            Text { text: "◎"; font-size: 15px; vertical-alignment: center; color: root.active-tool == "spotlight" ? #000000 : #94a3b8; }
-                            Text {
-                                text: "Focus";
-                                font-size: 10px; font-weight: 800;
-                                color: root.active-tool == "spotlight" ? #000000 : #94a3b8;
-                                vertical-alignment: center;
-                            }
+                            Text { text: "◎"; font-size: 15px; color: root.active-tool == "spotlight" ? #000 : #f8fafc; vertical-alignment: center; }
+                            Text { text: "Focus"; font-size: 10px; font-weight: 800; color: root.active-tool == "spotlight" ? #000 : #f8fafc; vertical-alignment: center; }
                         }
-                        spot_t := TouchArea { clicked => { root.select-tool("spotlight"); root.status-text = "Drag to spotlight a region, dims everything else"; } }
+                        spot_t := TouchArea { clicked => { root.select-tool("spotlight"); root.status-text = "Drag to spotlight a region & dim rest"; } }
                     }
                 }
 
-                // ── Row 2: Color Palette + Stroke + Action Buttons ────────────
+                // Swatches & Weight & Actions Row
                 HorizontalLayout {
-                    spacing: 10px;
-                    alignment: space-between;
+                    spacing: 10px; alignment: space-between;
 
-                    // Color Swatches (horizontal row)
                     HorizontalLayout {
-                        spacing: 8px;
-                        alignment: center;
-
-                        Text { text: "COLOR"; font-size: 8px; font-weight: 900; color: #475569; vertical-alignment: center; }
-
+                        spacing: 8px; alignment: center;
+                        Text { text: "COLOR"; font-size: 8px; font-weight: 900; color: #94a3b8; vertical-alignment: center; }
                         Rectangle { width: 24px; height: 24px; background: #ff3b30; border-radius: 12px; border-width: root.active-color == "#FF3B30" ? 2.5px : 0px; border-color: #ffffff; TouchArea { clicked => { root.select-color("#FF3B30"); } } }
                         Rectangle { width: 24px; height: 24px; background: #f59e0b; border-radius: 12px; border-width: root.active-color == "#F59E0B" ? 2.5px : 0px; border-color: #ffffff; TouchArea { clicked => { root.select-color("#F59E0B"); } } }
                         Rectangle { width: 24px; height: 24px; background: #22d45e; border-radius: 12px; border-width: root.active-color == "#22D45E" ? 2.5px : 0px; border-color: #ffffff; TouchArea { clicked => { root.select-color("#22D45E"); } } }
@@ -529,126 +477,67 @@ export component StudioEditor inherits Rectangle {
                         Rectangle { width: 24px; height: 24px; background: #000000; border-radius: 12px; border-width: root.active-color == "#000000" ? 2.5px : 0px; border-color: #64748b; TouchArea { clicked => { root.select-color("#000000"); } } }
                     }
 
-                    // Separator
-                    Rectangle { width: 1px; height: 28px; background: #1e293b; y: (parent.height - self.height)/2; }
+                    Rectangle { width: 1px; height: 28px; background: #334155; y: (parent.height - self.height)/2; }
 
-                    // Stroke Width Selector
                     HorizontalLayout {
-                        spacing: 6px;
-                        alignment: center;
-
-                        Text { text: "WEIGHT"; font-size: 8px; font-weight: 900; color: #475569; vertical-alignment: center; }
+                        spacing: 6px; alignment: center;
+                        Text { text: "WEIGHT"; font-size: 8px; font-weight: 900; color: #94a3b8; vertical-alignment: center; }
 
                         sw1 := Rectangle {
                             width: 42px; height: 28px;
                             background: root.stroke-size == 1 ? #22d45e : (sw1_t.has-hover ? #1e293b : #161e2e);
-                            border-radius: 6px;
-                            animate background { duration: 100ms; }
-
-                            HorizontalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 18px; height: 2px;
-                                    background: root.stroke-size == 1 ? #000000 : #94a3b8;
-                                    y: (parent.height - self.height)/2;
-                                }
-                            }
+                            border-radius: 6px; animate background { duration: 100ms; }
+                            HorizontalLayout { alignment: center; Rectangle { width: 18px; height: 2px; background: root.stroke-size == 1 ? #000 : #f8fafc; y: (parent.height - self.height)/2; } }
                             sw1_t := TouchArea { clicked => { root.select-stroke(1); } }
                         }
 
                         sw2 := Rectangle {
                             width: 42px; height: 28px;
                             background: root.stroke-size == 2 ? #22d45e : (sw2_t.has-hover ? #1e293b : #161e2e);
-                            border-radius: 6px;
-                            animate background { duration: 100ms; }
-
-                            HorizontalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 18px; height: 4px;
-                                    background: root.stroke-size == 2 ? #000000 : #94a3b8;
-                                    y: (parent.height - self.height)/2;
-                                    border-radius: 2px;
-                                }
-                            }
+                            border-radius: 6px; animate background { duration: 100ms; }
+                            HorizontalLayout { alignment: center; Rectangle { width: 18px; height: 4px; background: root.stroke-size == 2 ? #000 : #f8fafc; y: (parent.height - self.height)/2; border-radius: 2px; } }
                             sw2_t := TouchArea { clicked => { root.select-stroke(2); } }
                         }
 
                         sw3 := Rectangle {
                             width: 42px; height: 28px;
                             background: root.stroke-size == 3 ? #22d45e : (sw3_t.has-hover ? #1e293b : #161e2e);
-                            border-radius: 6px;
-                            animate background { duration: 100ms; }
-
-                            HorizontalLayout {
-                                alignment: center;
-                                Rectangle {
-                                    width: 18px; height: 7px;
-                                    background: root.stroke-size == 3 ? #000000 : #94a3b8;
-                                    y: (parent.height - self.height)/2;
-                                    border-radius: 3px;
-                                }
-                            }
+                            border-radius: 6px; animate background { duration: 100ms; }
+                            HorizontalLayout { alignment: center; Rectangle { width: 18px; height: 7px; background: root.stroke-size == 3 ? #000 : #f8fafc; y: (parent.height - self.height)/2; border-radius: 3px; } }
                             sw3_t := TouchArea { clicked => { root.select-stroke(3); } }
                         }
                     }
 
-                    // Separator
-                    Rectangle { width: 1px; height: 28px; background: #1e293b; y: (parent.height - self.height)/2; }
+                    Rectangle { width: 1px; height: 28px; background: #334155; y: (parent.height - self.height)/2; }
 
-                    // Action Buttons (Undo / Clear / Copy / Save)
                     HorizontalLayout {
-                        spacing: 6px;
-                        alignment: center;
+                        spacing: 6px; alignment: center;
 
                         undo_btn := Rectangle {
-                            height: 30px;
-                            background: undo_t.has-hover ? #1e293b : #161e2e;
-                            border-radius: 8px;
-                            border-width: 1px; border-color: #334155;
+                            height: 30px; background: undo_t.has-hover ? #1e293b : #161e2e; border-radius: 8px; border-width: 1px; border-color: #334155;
                             animate background { duration: 100ms; }
-                            HorizontalLayout {
-                                padding-left: 10px; padding-right: 10px; alignment: center;
-                                Text { text: "↩ UNDO"; font-size: 9px; font-weight: 800; color: #94a3b8; vertical-alignment: center; }
-                            }
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "↩ UNDO"; font-size: 9px; font-weight: 800; color: #f8fafc; vertical-alignment: center; } }
                             undo_t := TouchArea { clicked => { root.undo-annotation(); } }
                         }
 
                         clear_btn := Rectangle {
-                            height: 30px;
-                            background: clear_t.has-hover ? #1e293b : #161e2e;
-                            border-radius: 8px;
-                            border-width: 1px; border-color: #334155;
+                            height: 30px; background: clear_t.has-hover ? #1e293b : #161e2e; border-radius: 8px; border-width: 1px; border-color: #334155;
                             animate background { duration: 100ms; }
-                            HorizontalLayout {
-                                padding-left: 10px; padding-right: 10px; alignment: center;
-                                Text { text: "🗑 CLEAR"; font-size: 9px; font-weight: 800; color: #ef4444; vertical-alignment: center; }
-                            }
+                            HorizontalLayout { padding-left: 10px; padding-right: 10px; alignment: center; Text { text: "🗑 CLEAR"; font-size: 9px; font-weight: 800; color: #ef4444; vertical-alignment: center; } }
                             clear_t := TouchArea { clicked => { root.clear-annotations(); } }
                         }
 
                         copy_btn := Rectangle {
-                            height: 30px;
-                            background: copy_t.has-hover ? #1e293b : #161e2e;
-                            border-radius: 8px;
-                            border-width: 1px; border-color: #38bdf8;
+                            height: 30px; background: copy_t.has-hover ? #1e293b : #161e2e; border-radius: 8px; border-width: 1px; border-color: #38bdf8;
                             animate background { duration: 100ms; }
-                            HorizontalLayout {
-                                padding-left: 12px; padding-right: 12px; alignment: center;
-                                Text { text: "📋 COPY"; font-size: 9px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
-                            }
+                            HorizontalLayout { padding-left: 12px; padding-right: 12px; alignment: center; Text { text: "📋 COPY"; font-size: 9px; font-weight: 800; color: #38bdf8; vertical-alignment: center; } }
                             copy_t := TouchArea { clicked => { root.copy-clipboard(); } }
                         }
 
                         save_btn := Rectangle {
-                            height: 30px;
-                            background: save_t.has-hover ? #16a34a : #22d45e;
-                            border-radius: 8px;
+                            height: 30px; background: save_t.has-hover ? #16a34a : #22d45e; border-radius: 8px;
                             animate background { duration: 100ms; }
-                            HorizontalLayout {
-                                padding-left: 16px; padding-right: 16px; alignment: center;
-                                Text { text: "💾 SAVE"; font-size: 10px; font-weight: 900; color: #000000; vertical-alignment: center; }
-                            }
+                            HorizontalLayout { padding-left: 16px; padding-right: 16px; alignment: center; Text { text: "💾 SAVE"; font-size: 10px; font-weight: 900; color: #000000; vertical-alignment: center; } }
                             save_t := TouchArea { clicked => { root.save-editor-snapshot(); } }
                         }
                     }

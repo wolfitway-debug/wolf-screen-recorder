@@ -17,7 +17,7 @@ pub enum AnnotationShape {
     HighlightBox { x: i32, y: i32, width: u32, height: u32, color: Rgba<u8>, stroke: f32 },
     Oval { x: i32, y: i32, width: u32, height: u32, color: Rgba<u8>, stroke: f32 },
     StepNumber { x: i32, y: i32, num: u32, color: Rgba<u8> },
-    Freehand { start: (f32, f32), end: (f32, f32), color: Rgba<u8>, stroke: f32 },
+    Freehand { points: Vec<(f32, f32)>, color: Rgba<u8>, stroke: f32 },
     Spotlight { x: i32, y: i32, width: u32, height: u32 },
 }
 
@@ -70,13 +70,11 @@ impl AnnotationStack {
             match shape {
                 AnnotationShape::Arrow { start, end, color, stroke } => {
                     let thickness = (*stroke as i32).max(1);
-                    // Draw thick line body
                     for t in 0..thickness {
                         let offset = t as f32 - thickness as f32 / 2.0;
                         draw_line_segment_mut(&mut img, (start.0 + offset, start.1), (end.0 + offset, end.1), *color);
                         draw_line_segment_mut(&mut img, (start.0, start.1 + offset), (end.0, end.1 + offset), *color);
                     }
-                    // Filled arrowhead tip
                     let dx = end.0 - start.0;
                     let dy = end.1 - start.1;
                     let len = (dx * dx + dy * dy).sqrt().max(0.001);
@@ -87,7 +85,6 @@ impl AnnotationStack {
                     let tip2 = (end.0 - arrow_len * (ux + uy * 0.5), end.1 - arrow_len * (uy - ux * 0.5));
                     draw_line_segment_mut(&mut img, *end, tip1, *color);
                     draw_line_segment_mut(&mut img, *end, tip2, *color);
-                    // Fill the arrowhead body
                     for frac in 0..=10 {
                         let f = frac as f32 / 10.0;
                         let mid = (tip1.0 + f * (tip2.0 - tip1.0), tip1.1 + f * (tip2.1 - tip1.1));
@@ -96,13 +93,15 @@ impl AnnotationStack {
                 }
 
                 AnnotationShape::TextCallout { x, y, text, color } => {
-                    let text_width = (text.len() as i32 * 8 + 16).min(300);
-                    let bg_rect = Rect::at((x - 6).max(0), (y - 6).max(0)).of_size(text_width as u32, 30);
-                    draw_filled_rect_mut(&mut img, bg_rect, Rgba([12, 18, 28, 230]));
-                    draw_hollow_rect_mut(&mut img, bg_rect, *color);
+                    let display_text = if text.trim().is_empty() { "Callout" } else { text.as_str() };
                     let font_data = include_bytes!("assets/Roboto-Regular.ttf");
+                    let char_count = display_text.chars().count().max(1);
+                    let text_width = (char_count as i32 * 9 + 20).min(400);
+                    let bg_rect = Rect::at((*x - 8).max(0), (*y - 8).max(0)).of_size(text_width as u32, 34);
+                    draw_filled_rect_mut(&mut img, bg_rect, Rgba([8, 12, 20, 235]));
+                    draw_hollow_rect_mut(&mut img, bg_rect, *color);
                     if let Ok(font) = FontRef::try_from_slice(font_data) {
-                        draw_text_mut(&mut img, *color, *x, *y, PxScale::from(14.0), &font, text);
+                        draw_text_mut(&mut img, *color, *x, *y, PxScale::from(16.0), &font, display_text);
                     }
                 }
 
@@ -113,8 +112,7 @@ impl AnnotationStack {
                         let x2 = (x + *width as i32).min(img.width() as i32);
                         let y2 = (y + *height as i32).min(img.height() as i32);
                         if x2 > x0 && y2 > y0 {
-                            // Pixelate by sampling every 8px
-                            let block = 8u32;
+                            let block = 10u32;
                             let bx = x0 as u32;
                             let by = y0 as u32;
                             let bw = (x2 - x0) as u32;
@@ -135,9 +133,8 @@ impl AnnotationStack {
                                 }
                                 px += block;
                             }
-                            // Draw border
                             let rect = Rect::at(x0, y0).of_size(bw, bh);
-                            draw_hollow_rect_mut(&mut img, rect, Rgba([0, 255, 102, 200]));
+                            draw_hollow_rect_mut(&mut img, rect, Rgba([34, 212, 94, 220]));
                         }
                     }
                 }
@@ -170,34 +167,39 @@ impl AnnotationStack {
                 }
 
                 AnnotationShape::StepNumber { x, y, num, color } => {
-                    let radius = 16i32;
-                    // Draw filled color circle
+                    let radius = 18i32;
                     draw_filled_circle_mut(&mut img, (*x, *y), radius, *color);
-                    // White border ring
-                    draw_hollow_ellipse_mut(&mut img, (*x, *y), radius + 1, radius + 1, Rgba([255, 255, 255, 220]));
-                    // Number text centered
+                    draw_hollow_ellipse_mut(&mut img, (*x, *y), radius + 1, radius + 1, Rgba([255, 255, 255, 240]));
                     let font_data = include_bytes!("assets/Roboto-Regular.ttf");
                     if let Ok(font) = FontRef::try_from_slice(font_data) {
                         let label = num.to_string();
-                        let offset_x = if *num >= 10 { 9 } else { 5 };
+                        let offset_x = if *num >= 10 { 10 } else { 5 };
                         draw_text_mut(
                             &mut img,
                             Rgba([0, 0, 0, 255]),
                             x - offset_x,
-                            y - 8,
-                            PxScale::from(18.0),
+                            y - 9,
+                            PxScale::from(20.0),
                             &font,
                             &label,
                         );
                     }
                 }
 
-                AnnotationShape::Freehand { start, end, color, stroke } => {
+                AnnotationShape::Freehand { points, color, stroke } => {
                     let thickness = (*stroke as i32).max(1);
-                    for t in 0..thickness {
-                        let offset = t as f32 - thickness as f32 / 2.0;
-                        draw_line_segment_mut(&mut img, (start.0 + offset, start.1), (end.0 + offset, end.1), *color);
-                        draw_line_segment_mut(&mut img, (start.0, start.1 + offset), (end.0, end.1 + offset), *color);
+                    if points.len() >= 2 {
+                        for window in points.windows(2) {
+                            let p1 = window[0];
+                            let p2 = window[1];
+                            for t in 0..thickness {
+                                let offset = t as f32 - thickness as f32 / 2.0;
+                                draw_line_segment_mut(&mut img, (p1.0 + offset, p1.1), (p2.0 + offset, p2.1), *color);
+                                draw_line_segment_mut(&mut img, (p1.0, p1.1 + offset), (p2.0, p2.1 + offset), *color);
+                            }
+                        }
+                    } else if let Some(p) = points.first() {
+                        draw_filled_circle_mut(&mut img, (p.0 as i32, p.1 as i32), (thickness / 2).max(1), *color);
                     }
                 }
 
@@ -213,16 +215,15 @@ impl AnnotationStack {
                             let in_spotlight = px >= x1 && px < x2 && py >= y1 && py < y2;
                             if !in_spotlight {
                                 let pixel = img.get_pixel_mut(px, py);
-                                pixel[0] = (pixel[0] as f32 * 0.3) as u8;
-                                pixel[1] = (pixel[1] as f32 * 0.3) as u8;
-                                pixel[2] = (pixel[2] as f32 * 0.3) as u8;
+                                pixel[0] = (pixel[0] as f32 * 0.25) as u8;
+                                pixel[1] = (pixel[1] as f32 * 0.25) as u8;
+                                pixel[2] = (pixel[2] as f32 * 0.25) as u8;
                             }
                         }
                     }
-                    // Spotlight border
                     if x2 > x1 && y2 > y1 {
                         let rect = Rect::at(x1 as i32, y1 as i32).of_size(x2 - x1, y2 - y1);
-                        draw_hollow_rect_mut(&mut img, rect, Rgba([255, 255, 255, 200]));
+                        draw_hollow_rect_mut(&mut img, rect, Rgba([255, 255, 255, 220]));
                     }
                 }
             }
@@ -231,19 +232,17 @@ impl AnnotationStack {
     }
 }
 
-/// Parse a hex color string like "#22D45E" or "22D45E" into an Rgba<u8>
 pub fn parse_color_hex(hex: &str) -> Rgba<u8> {
     let hex = hex.trim_start_matches('#');
     if hex.len() < 6 {
-        return Rgba([0, 255, 102, 255]); // fallback: wolf green
+        return Rgba([34, 212, 94, 255]); // fallback: wolf green
     }
-    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(0);
-    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(255);
-    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(102);
+    let r = u8::from_str_radix(&hex[0..2], 16).unwrap_or(34);
+    let g = u8::from_str_radix(&hex[2..4], 16).unwrap_or(212);
+    let b = u8::from_str_radix(&hex[4..6], 16).unwrap_or(94);
     Rgba([r, g, b, 255])
 }
 
-/// Stroke size index to pixel width: 1=Thin(2px), 2=Normal(4px), 3=Thick(8px)
 pub fn stroke_size_to_px(size: i32) -> f32 {
     match size {
         1 => 2.0,

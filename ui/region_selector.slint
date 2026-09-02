@@ -15,11 +15,38 @@ export component RegionSelectorWindow inherits Window {
     Rectangle {
         width: 100%;
         height: 100%;
-        background: #00000060;
+        background: #00000075;
+
+        // Top Helper Banner
+        Rectangle {
+            x: (parent.width - self.width)/2;
+            y: 30px;
+            height: 36px;
+            background: #080c14e0;
+            border-radius: 18px;
+            border-width: 1.5px;
+            border-color: #22d45e;
+            drop-shadow-blur: 16px;
+            drop-shadow-color: #000000a0;
+
+            HorizontalLayout {
+                padding-left: 16px; padding-right: 16px;
+                spacing: 8px; alignment: center;
+
+                Text { text: "✂️"; font-size: 14px; vertical-alignment: center; }
+                Text {
+                    text: "Drag to select capture region · Press ESC to cancel";
+                    font-size: 11px; font-weight: 800; color: #f8fafc;
+                    vertical-alignment: center;
+                }
+            }
+        }
 
         TouchArea {
             property <int> start-x;
             property <int> start-y;
+
+            mouse-cursor: MouseCursor.crosshair;
 
             pointer-event(event) => {
                 if (event.button == PointerEventButton.left) {
@@ -34,13 +61,13 @@ export component RegionSelectorWindow inherits Window {
                     } else if (event.kind == PointerEventKind.up) {
                         let end-x = self.mouse-x / 1px;
                         let end-y = self.mouse-y / 1px;
-                        
+
                         let final-x = self.start-x.min(end-x);
                         let final-y = self.start-y.min(end-y);
                         let final-w = (end-x - self.start-x).abs();
                         let final-h = (end-y - self.start-y).abs();
 
-                        if (final-w > 10 && final-h > 10) {
+                        if (final-w > 20 && final-h > 20) {
                             root.selection-confirmed(final-x, final-y, final-w, final-h);
                         } else {
                             root.selection-cancelled();
@@ -73,24 +100,31 @@ export component RegionSelectorWindow inherits Window {
             y: root.selection-y * 1px;
             width: root.selection-w * 1px;
             height: root.selection-h * 1px;
-            background: #00ff6615;
+            background: #22d45e1a;
             border-width: 2px;
-            border-color: #00ff66;
+            border-color: #22d45e;
 
-            // Dimension Feedback Badge
+            // Corner Handles
+            Rectangle { width: 8px; height: 8px; background: #22d45e; x: -4px; y: -4px; }
+            Rectangle { width: 8px; height: 8px; background: #22d45e; x: parent.width - 4px; y: -4px; }
+            Rectangle { width: 8px; height: 8px; background: #22d45e; x: -4px; y: parent.height - 4px; }
+            Rectangle { width: 8px; height: 8px; background: #22d45e; x: parent.width - 4px; y: parent.height - 4px; }
+
+            // High-Contrast Dimension Feedback Badge
             Rectangle {
-                x: 10px; y: 10px;
-                height: 22px;
-                background: #0b0f19;
-                border-radius: 6px;
-                border-width: 1px;
-                border-color: #00ff66;
+                x: (parent.width - self.width)/2;
+                y: (parent.height - self.height)/2;
+                height: 28px;
+                background: #080c14f0;
+                border-radius: 14px;
+                border-width: 1.5px;
+                border-color: #22d45e;
 
                 HorizontalLayout {
-                    padding-left: 8px; padding-right: 8px; alignment: center;
+                    padding-left: 12px; padding-right: 12px; alignment: center;
                     Text {
                         text: "📐 " + root.selection-w + " × " + root.selection-h + " px";
-                        font-size: 10px; font-weight: 800; color: #00ff66;
+                        font-size: 11px; font-weight: 900; color: #22d45e;
                         vertical-alignment: center;
                     }
                 }

@@ -1,9 +1,11 @@
 import { SettingsModal } from "settings.slint";
 import { StudioEditor } from "editor.slint";
+export { RegionSelectorWindow } from "region_selector.slint";
+export { WebcamPipWindow } from "webcam_pip.slint";
 
 export component AppWindow inherits Window {
-    width: root.show-settings-modal ? 700px : (root.show-editor-modal ? 900px : 800px);
-    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 600px : 60px);
+    width: root.show-settings-modal ? 700px : (root.show-editor-modal ? 920px : 820px);
+    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 620px : 60px);
     no-frame: true;
     background: transparent;
     always-on-top: true;
@@ -46,6 +48,7 @@ export component AppWindow inherits Window {
     callback select-resolution(string);
     callback toggle-audio();
     callback toggle-webcam();
+    callback open-region-selector();
     callback toggle-language();
     callback select-language(string);
     callback select-encoder(string);
@@ -55,7 +58,7 @@ export component AppWindow inherits Window {
     callback copy-clipboard();
     callback undo-annotation();
     callback clear-annotations();
-    callback apply-annotation(string, string, int, int, int, int, int);
+    callback apply-annotation(string, string, int, int, int, int, int, string);
     callback save-editor-export();
     callback open-paddle-checkout();
     callback move-window(length, length);
@@ -67,7 +70,7 @@ export component AppWindow inherits Window {
         background: #080c14;
         border-radius: root.show-settings-modal || root.show-editor-modal ? 20px : 16px;
         border-width: 1.5px;
-        border-color: root.is-recording ? #ef444470 : #22d45e22;
+        border-color: root.is-recording ? #ef444470 : #22d45e30;
         drop-shadow-blur: 28px;
         drop-shadow-color: root.is-recording ? #ef444440 : #22d45e18;
         animate border-color { duration: 200ms; }
@@ -106,7 +109,7 @@ export component AppWindow inherits Window {
                     background: #0f1623;
                     border-radius: 10px;
                     border-width: 1px;
-                    border-color: #22d45e30;
+                    border-color: #22d45e40;
 
                     Text {
                         text: "🐺";
@@ -179,7 +182,7 @@ export component AppWindow inherits Window {
                             Text {
                                 text: "⊡ Desktop";
                                 font-size: 10px; font-weight: 800;
-                                color: root.selected-mode == "desktop" ? #000000 : #94a3b8;
+                                color: root.selected-mode == "desktop" ? #000000 : #f8fafc;
                                 vertical-alignment: center;
                             }
                         }
@@ -198,7 +201,7 @@ export component AppWindow inherits Window {
                             Text {
                                 text: "⊞ Window";
                                 font-size: 10px; font-weight: 800;
-                                color: root.selected-mode == "window" ? #000000 : #94a3b8;
+                                color: root.selected-mode == "window" ? #000000 : #f8fafc;
                                 vertical-alignment: center;
                             }
                         }
@@ -215,13 +218,18 @@ export component AppWindow inherits Window {
                         HorizontalLayout {
                             padding-left: 10px; padding-right: 10px; alignment: center;
                             Text {
-                                text: "⊠ Region";
+                                text: "✂️ Region";
                                 font-size: 10px; font-weight: 800;
-                                color: root.selected-mode == "region" ? #000000 : #94a3b8;
+                                color: root.selected-mode == "region" ? #000000 : #f8fafc;
                                 vertical-alignment: center;
                             }
                         }
-                        tr_t := TouchArea { clicked => { root.select-mode("region"); } }
+                        tr_t := TouchArea {
+                            clicked => {
+                                root.select-mode("region");
+                                root.open-region-selector();
+                            }
+                        }
                     }
                 }
             }
@@ -316,7 +324,7 @@ export component AppWindow inherits Window {
                     border-radius: 10px;
                     border-width: 1px; border-color: #334155;
                     animate background { duration: 100ms; }
-                    Text { text: "⚙"; font-size: 16px; color: #64748b; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                    Text { text: "⚙"; font-size: 16px; color: #cbd5e1; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
                     settings_i_t := TouchArea { clicked => { root.show-settings-modal = true; } }
                 }
 
@@ -347,7 +355,6 @@ export component AppWindow inherits Window {
                     HorizontalLayout {
                         padding-left: 14px; padding-right: 14px;
                         spacing: 6px; alignment: center;
-                        // Recording dot indicator
                         Rectangle {
                             width: 8px; height: 8px;
                             background: root.is-recording ? #ffffff : #000000;
@@ -392,8 +399,8 @@ export component AppWindow inherits Window {
             copy-clipboard => { root.copy-clipboard(); }
             undo-annotation => { root.undo-annotation(); }
             clear-annotations => { root.clear-annotations(); }
-            apply-annotation(tool, color, stroke, x1, y1, x2, y2) => {
-                root.apply-annotation(tool, color, stroke, x1, y1, x2, y2);
+            apply-annotation(tool, color, stroke, x1, y1, x2, y2, custom_text) => {
+                root.apply-annotation(tool, color, stroke, x1, y1, x2, y2, custom_text);
             }
             save-editor-snapshot => { root.save-editor-export(); }
         }

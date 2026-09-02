@@ -29,6 +29,13 @@ impl CaptureEngine {
         path.push(filename);
         
         let mut dyn_img = image::DynamicImage::ImageRgba8(image);
+
+        if let Some(r) = crate::region::get_active_region() {
+            if r.width > 0 && r.height > 0 && (r.x as u32) + r.width <= dyn_img.width() && (r.y as u32) + r.height <= dyn_img.height() {
+                dyn_img = dyn_img.crop_imm(r.x as u32, r.y as u32, r.width, r.height);
+            }
+        }
+
         if let Some(wm) = watermark {
             AnnotationEngine::process_snapshot_with_watermark(&mut dyn_img, wm);
         }

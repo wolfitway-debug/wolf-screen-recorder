@@ -1,0 +1,124 @@
+export component WebcamPipWindow inherits Window {
+    width: 200px;
+    height: 200px;
+    no-frame: true;
+    background: transparent;
+    always-on-top: true;
+
+    in-out property <image> webcam-frame;
+    in-out property <bool> has-frame: false;
+    in-out property <bool> is-muted: false;
+
+    callback move-window(length, length);
+    callback toggle-mute();
+    callback close-pip();
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #080c14;
+        border-radius: 100px; // Circular PIP bubble
+        border-width: 2.5px;
+        border-color: #22d45e;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: #22d45e40;
+        clip: true;
+
+        // Drag handle across entire circle
+        TouchArea {
+            property <length> start-x;
+            property <length> start-y;
+
+            pointer-event(event) => {
+                if (event.button == PointerEventButton.left) {
+                    if (event.kind == PointerEventKind.down) {
+                        self.start-x = self.mouse-x;
+                        self.start-y = self.mouse-y;
+                    }
+                }
+            }
+            moved => {
+                root.move-window(self.mouse-x - self.start-x, self.mouse-y - self.start-y);
+            }
+        }
+
+        // Camera Feed Surface
+        if (root.has-frame) : Image {
+            source: root.webcam-frame;
+            width: 100%;
+            height: 100%;
+            image-fit: cover;
+        }
+
+        // Animated High-Tech Camera Active Signal Placeholder (when camera active but no device feed)
+        if (!root.has-frame) : VerticalLayout {
+            alignment: center;
+            spacing: 6px;
+
+            Text {
+                text: "📹";
+                font-size: 36px;
+                horizontal-alignment: center;
+            }
+            Text {
+                text: "WEBCAM LIVE";
+                font-size: 10px;
+                font-weight: 900;
+                color: #22d45e;
+                horizontal-alignment: center;
+            }
+            Rectangle {
+                width: 40px; height: 3px;
+                background: #22d45e;
+                border-radius: 1.5px;
+                x: (parent.width - self.width)/2;
+            }
+        }
+
+        // Hover Overlay Control Controls
+        Rectangle {
+            width: 100%;
+            height: 40px;
+            y: parent.height - self.height;
+            background: #080c14c0;
+
+            HorizontalLayout {
+                padding-left: 16px; padding-right: 16px;
+                alignment: space-between;
+
+                // Mute / Unmute Button
+                mute_btn := Rectangle {
+                    width: 26px; height: 26px;
+                    background: mute_t.has-hover ? #1e293b : transparent;
+                    border-radius: 13px;
+                    y: (parent.height - self.height)/2;
+
+                    Text {
+                        text: root.is-muted ? "🔇" : "🎤";
+                        font-size: 12px;
+                        x: (parent.width - self.width)/2;
+                        y: (parent.height - self.height)/2;
+                    }
+                    mute_t := TouchArea { clicked => { root.toggle-mute(); } }
+                }
+
+                // Close PIP Button
+                close_btn := Rectangle {
+                    width: 26px; height: 26px;
+                    background: close_t.has-hover ? #ef4444 : transparent;
+                    border-radius: 13px;
+                    y: (parent.height - self.height)/2;
+
+                    Text {
+                        text: "✕";
+                        font-size: 11px;
+                        color: #ffffff;
+                        x: (parent.width - self.width)/2;
+                        y: (parent.height - self.height)/2;
+                    }
+                    close_t := TouchArea { clicked => { root.close-pip(); } }
+                }
+            }
+        }
+    }
+}
