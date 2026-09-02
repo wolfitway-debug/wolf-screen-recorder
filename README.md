@@ -1,8 +1,93 @@
 # 🐺 Wolf Screen Recorder
 
-> **High-Performance Hardware-Accelerated Screen Capture Engine with Studio Pre-Processing & Cinematic Focus Modes**
+> **High-Performance, Hardware-Accelerated Screen Recorder & Snapshot Studio Engine for Linux, macOS, and Windows.**
+>
+> **100% Offline · Zero Telemetry · Absolute Privacy · Native Rust & Slint UI**
 
-Wolf Screen Recorder is an advanced, ultra-lightweight screen recording application built in Rust and Slint UI. Designed for instant adaptability across Linux, macOS, and Windows, it features native GPU auto-detection, vector annotations, cinematic cursor tracking, and bilingual zero-overhead UI state.
+---
+
+## 🛡️ 100% Privacy-First & Zero Telemetry Guarantee
+
+Wolf Screen Recorder is built from the ground up on a **strict local-first, zero-trust privacy architecture**:
+
+* 🚫 **Zero Network Telemetry**: Absolutely **no analytics**, **no tracking**, **no phone-home ping**, **no remote telemetry**, and **no third-party data collection**.
+* 🔒 **Air-Gapped Execution**: All video encoding, screen capture, audio recording, vector annotations, and snapshot processing execute **100% locally on your machine's CPU/GPU and local storage**.
+* 🌐 **Complete Offline Independence**: Never requires an active internet connection or external cloud API to function.
+* 🔍 **Fully Auditable**: Built in safety-guaranteed **Rust** and released under the **GNU General Public License v3.0 (GPLv3)**. You can inspect the source code, build it locally, and audit network activity yourself.
+
+---
+
+## ✨ God-Tier Features & Architecture
+
+### 🚀 Global System-Wide Hotkey Engine
+* **System-Wide Key Listener**: Powered by a low-level `rdev` hook that responds instantly system-wide—even when the application window is minimized or hidden in the background.
+* **Default Shortcuts**:
+  * `Super + Shift + R` — Instant Video Recording Start / Stop toggle
+  * `Super + Shift + S` — Fullscreen / Region Snapshot to Studio Editor
+  * `Super + Shift + X` — Rubber-Band Screen Region Selector
+  * `Escape` — Cancel active selection or dismiss modals
+* **Customizable Shortcuts**: Rebind all hotkeys directly from the **Preferences ⚙️** panel.
+
+### ✂️ CleanShot X-Style Rubber-Band Region Selector
+* **Full-Monitor Live Backdrop**: Captures a live full-resolution snapshot of your screen via `xcap` and projects it onto a fullscreen overlay.
+* **Bright Cutout & Dimming**: Displays a 45% translucent dark background while keeping your selected crop area **100% full brightness**.
+* **Precision Drag Controls**: Includes 8×8px emerald (`#22d45e`) corner grab handles and a dynamic high-contrast dimension badge (`📐 W × H px`).
+* **Coordinate Clamping**: Clamps selection box bounds `[0, Monitor_W]` and `[0, Monitor_H]` with automatic coordinate normalization for inverted drags.
+
+### 🎨 Showcase Studio Annotation Editor
+* **8 Professional Markup Tools**:
+  1. 🏹 **Arrow Pointer**: Smooth vector direction arrows with auto-scaling heads.
+  2. 🔲 **Highlight Box**: High-visibility outline frames for UI element callouts.
+  3. ⭕ **Oval / Circle**: Rounded focus rings.
+  4. ⬛ **Redact / Blur Box**: Solid redacting masks to censor passwords, API keys, and personal data.
+  5. 💬 **Text Callout**: Interactive popover modal for custom dynamic text overlays.
+  6. ① **Step Sequence Bubbles**: Consecutive numbered callout badges (①, ②, ③...).
+  7. ✏️ **Freehand Curve**: Smooth digital pen strokes for quick sketching.
+  8. 🔦 **Spotlight Focus**: Darkens surrounding image area while spotlighting key features.
+* **Palette Swatches & Stroke Width Picker**: Instant tool color selection (Emerald, Crimson, Sky Blue, Amber, White) and stroke weight adjustments (`2px` to `8px`).
+
+### ⚡ Native Hardware Auto-Detection Engine
+* **GPU Hardware Encoding Pipeline**: Automatically detects your system GPU at startup (`sysinfo` + FFmpeg scanner) and routes video encoding to hardware acceleration:
+  * `NVENC` for NVIDIA GPUs
+  * `VideoToolbox` for Apple Silicon / macOS
+  * `VA-API` for Intel & AMD on Linux
+  * `QSV` for Intel QuickSync
+* **Zero-Lag Fallback**: Smoothly tuned software fallback (`libx264` with dynamic thread auto-allocation) if hardware encoders are unavailable.
+
+### 🎥 Picture-in-Picture Webcam Overlay & Audio Engine
+* **Floating Webcam PIP**: Circular floating webcam overlay with real-time video feed streaming.
+* **Microphone WAV PCM Recorder**: Synchronous multi-channel microphone recording mixed into post-processed video streams via `cpal`.
+
+### 🌐 6-Language Localization Engine
+* **Instant Internationalization**: Switch between **6 supported languages** with real-time UI dictionary updates:
+  * 🇬🇧 English (`EN`) · 🇷🇴 Romanian (`RO`) · 🇪🇸 Spanish (`ES`)
+  * 🇩🇪 German (`DE`) · 🇫🇷 French (`FR`) · 🇯🇵 Japanese (`JA`)
+
+---
+
+## 🛠️ Building & Running Locally
+
+### Prerequisites
+1. **Rust**: 1.75+ toolchain installed via [`rustup`](https://rustup.rs/)
+2. **FFmpeg**: Installed and accessible in your system `PATH`
+3. **OS**: Linux (X11 / Wayland), macOS (11+), or Windows (10/11)
+
+### Build Commands
+
+```bash
+# Clone the repository
+git clone https://github.com/wolfitway-debug/wolf-screen-recorder.git
+cd wolf-screen-recorder
+
+# Check code compilation & dependencies
+cargo check
+
+# Run locally in debug mode
+cargo run
+
+# Build optimized production release binary
+cargo build --release
+```
 
 ---
 
@@ -16,51 +101,7 @@ To maintain absolute intellectual property integrity and technical auditability,
 * **Zero Direct Pull Requests**: Direct pull requests to this repository are disabled and will not be merged.
 * **Fork-Only Modifications**: External developers, enterprises, and organizations are required to fork the repository for custom needs, internal adaptations, or specific feature extensions in accordance with GPLv3.
 
-For enterprise licensing, corporate sponsorship, or commercial custom builds, please access the Paddle merchant checkout link inside the application's **"Support the Dev" / "Susține Dezvoltatorul"** interface or contact `WOLFITWAYAGENCY SRL`.
-
----
-
-## ✨ Features & Architecture
-
-### ⚡ Milestone 1: Native Hardware Auto-Detection Engine
-* **GPU & Encoder Profiling**: Queries system capabilities at boot via `sysinfo` and FFmpeg hardware capability scanning to route video encoding directly through hardware pipelines (`NVENC` for NVIDIA, `VideoToolbox` for macOS, `VA-API` for Linux, or `QSV` for Intel).
-* **Fallback Logic**: Seamlessly falls back to optimized software encoding (`libx264` with dynamic preset tuning) if specialized hardware encoders are missing or fail.
-* **Dynamic Resource Allocation**: Auto-tunes thread allocation, frame buffer lengths, and FFmpeg parameter limits based on system core count and memory availability.
-
-### 🌐 Milestone 2: Bilingual Interface & Micro-Interaction Layer (EN/RO)
-* **Zero-Overhead Dictionary**: Instant language swapping between English (`EN`) and Romanian (`RO`) inside the Slint UI state.
-* **Micro-Interactions**: Hover pulses on the record button, smooth opacity sliders for preferences, live status notifications, and hardware badge indicators (e.g. `[VA-API]`, `[NVENC]`, `[SW x264]`).
-
-### 🎨 Milestone 3: Product Showcase Pre-Processing & Annotations
-* **Vector Overlay Engine**: Integrates Rust `image` and `imageproc` crates for programmatically stamping bounding boxes, highlighted click radii, drop shadows, and clean typography onto captured snapshot frames.
-* **Automated Watermarking**: Burns brand watermarks ("WOLFITWAY") or custom creator metadata onto exported frames automatically for professional showcases.
-
-### 🎬 Milestone 4: Cinematic Zoom & Dynamic Focus Modes
-* **Cursor-Tracking Focus**: Logs mouse click coordinates and timestamps during recording sessions.
-* **FFmpeg Pan-and-Zoom Filters**: Programmatically injects dynamic `crop` and `zoompan` filter chains during post-processing to smoothly zoom in on clicked UI elements and product features.
-
-### 💳 Milestone 5: GPLv3 Distribution & Enterprise Monetization
-* **Corporate Paddle Checkout**: Integrated post-recording modal connecting users directly to corporate sponsorship and enterprise licensing via Paddle checkout rails (`https://buy.paddle.com/placeholder-wolfitway`).
-
----
-
-## 🛠️ Building & Running
-
-### Prerequisites
-* **Rust**: 1.75+ (Cargo toolchain)
-* **FFmpeg**: Installed and available in PATH (with `libx264`, `vaapi`, `nvenc`, or `qsv` support depending on GPU)
-
-### Build Commands
-```bash
-# Check compilation
-cargo check
-
-# Run in debug mode
-cargo run
-
-# Build release binary
-cargo build --release
-```
+For enterprise licensing, corporate sponsorship, or commercial custom builds, access the Paddle merchant checkout link inside the application's **"Support the Dev" / "Susține Dezvoltatorul"** interface or contact `WOLFITWAYAGENCY SRL`.
 
 ---
 
