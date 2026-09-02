@@ -1,0 +1,430 @@
+export component AppWindow inherits Window {
+    width: 720px;
+    height: root.show-settings || root.show-support-modal ? 148px : 86px;
+    no-frame: true;
+    background: transparent;
+    always-on-top: true;
+
+    // Core Properties
+    in-out property <bool> is-recording: false;
+    in-out property <string> selected-mode: "desktop";
+    in-out property <string> resolution: "1080p";
+    in-out property <bool> audio-enabled: false;
+    in-out property <bool> webcam-enabled: false;
+    
+    // Hardware & Bilingual Localization State
+    in-out property <string> lang: "en"; // "en" or "ro"
+    in-out property <string> hw-encoder-tag: "[HW-AUTO]";
+    in-out property <string> status-message: "Ready";
+
+    // Modal States
+    in-out property <bool> show-settings: false;
+    in-out property <bool> show-support-modal: false;
+    in-out property <bool> watermark-enabled: true;
+    in-out property <bool> cinematic-zoom-enabled: true;
+
+    // Callbacks
+    callback toggle-recording();
+    callback take-snapshot();
+    callback select-mode(string);
+    callback select-resolution(string);
+    callback toggle-audio();
+    callback toggle-webcam();
+    callback toggle-language();
+    callback open-paddle-checkout();
+    callback move-window(length, length);
+
+    // Main Glass Container
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #0b0f19;
+        border-radius: 18px;
+        border-width: 1.5px;
+        border-color: root.is-recording ? #ff3b30 : #00ff66;
+        drop-shadow-blur: 24px;
+        drop-shadow-color: root.is-recording ? #ff3b3050 : #00ff6635;
+
+        // Window Dragging Target
+        TouchArea {
+            property <length> start-x;
+            property <length> start-y;
+            
+            pointer-event(event) => {
+                if (event.button == PointerEventButton.left) {
+                    if (event.kind == PointerEventKind.down) {
+                        self.start-x = self.mouse-x;
+                        self.start-y = self.mouse-y;
+                    }
+                }
+            }
+            moved => {
+                root.move-window(self.mouse-x - self.start-x, self.mouse-y - self.start-y);
+            }
+        }
+
+        VerticalLayout {
+            padding: 10px;
+            spacing: 8px;
+
+            // Row 1: Brand & Control Toolbar
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: space-between;
+
+                // Logo & Drag Handle Badge
+                Rectangle {
+                    height: 36px;
+                    background: #141c2e;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #23314d;
+
+                    HorizontalLayout {
+                        padding-left: 10px;
+                        padding-right: 10px;
+                        spacing: 6px;
+                        alignment: center;
+
+                        Text {
+                            text: "🐺 WOLFCAP";
+                            font-size: 11px;
+                            font-weight: 900;
+                            color: #00ff66;
+                            vertical-alignment: center;
+                        }
+
+                        Rectangle {
+                            height: 18px;
+                            background: #1e293b;
+                            border-radius: 5px;
+
+                            HorizontalLayout {
+                                padding-left: 5px;
+                                padding-right: 5px;
+                                alignment: center;
+
+                                Text {
+                                    text: root.hw-encoder-tag;
+                                    font-size: 9px;
+                                    font-weight: 800;
+                                    color: #38bdf8;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Mode Selector Pills (FULL / WIN / CROP)
+                Rectangle {
+                    height: 36px;
+                    background: #141c2e;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #23314d;
+
+                    HorizontalLayout {
+                        padding: 3px;
+                        spacing: 3px;
+
+                        Rectangle {
+                            width: 48px; height: 30px;
+                            background: root.selected-mode == "desktop" ? #00ff66 : transparent;
+                            border-radius: 7px;
+                            Text {
+                                text: "FULL";
+                                font-size: 10px; font-weight: 800;
+                                color: root.selected-mode == "desktop" ? #000000 : #94a3b8;
+                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                            }
+                            TouchArea { clicked => { root.select-mode("desktop"); } }
+                        }
+
+                        Rectangle {
+                            width: 48px; height: 30px;
+                            background: root.selected-mode == "window" ? #00ff66 : transparent;
+                            border-radius: 7px;
+                            Text {
+                                text: "WIN";
+                                font-size: 10px; font-weight: 800;
+                                color: root.selected-mode == "window" ? #000000 : #94a3b8;
+                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                            }
+                            TouchArea { clicked => { root.select-mode("window"); } }
+                        }
+
+                        Rectangle {
+                            width: 48px; height: 30px;
+                            background: root.selected-mode == "region" ? #00ff66 : transparent;
+                            border-radius: 7px;
+                            Text {
+                                text: "CROP";
+                                font-size: 10px; font-weight: 800;
+                                color: root.selected-mode == "region" ? #000000 : #94a3b8;
+                                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                            }
+                            TouchArea { clicked => { root.select-mode("region"); } }
+                        }
+                    }
+                }
+
+                // Audio & Cam Toggles
+                HorizontalLayout {
+                    spacing: 5px;
+
+                    Rectangle {
+                        width: 54px; height: 36px;
+                        background: root.audio-enabled ? #1e293b : #141c2e;
+                        border-radius: 10px;
+                        border-width: 1px;
+                        border-color: root.audio-enabled ? #00ff66 : #23314d;
+
+                        Text {
+                            text: root.audio-enabled ? "MIC ON" : "MIC OFF";
+                            font-size: 9px; font-weight: 800;
+                            color: root.audio-enabled ? #00ff66 : #64748b;
+                            x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                        }
+                        TouchArea { clicked => { root.toggle-audio(); } }
+                    }
+
+                    Rectangle {
+                        width: 54px; height: 36px;
+                        background: root.webcam-enabled ? #1e293b : #141c2e;
+                        border-radius: 10px;
+                        border-width: 1px;
+                        border-color: root.webcam-enabled ? #00ff66 : #23314d;
+
+                        Text {
+                            text: root.webcam-enabled ? "CAM ON" : "CAM OFF";
+                            font-size: 9px; font-weight: 800;
+                            color: root.webcam-enabled ? #00ff66 : #64748b;
+                            x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                        }
+                        TouchArea { clicked => { root.toggle-webcam(); } }
+                    }
+                }
+
+                // Language Switcher (EN / RO)
+                Rectangle {
+                    width: 44px; height: 36px;
+                    background: #141c2e;
+                    border-radius: 10px;
+                    border-width: 1.2px;
+                    border-color: #3b82f6;
+
+                    Text {
+                        text: root.lang == "ro" ? "RO" : "EN";
+                        font-size: 11px; font-weight: 900;
+                        color: #3b82f6;
+                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                    }
+                    TouchArea { clicked => { root.toggle-language(); } }
+                }
+
+                // Settings Toggle
+                Rectangle {
+                    width: 36px; height: 36px;
+                    background: root.show-settings ? #3b82f6 : #141c2e;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #23314d;
+
+                    Text {
+                        text: "SET";
+                        font-size: 9px; font-weight: 800;
+                        color: root.show-settings ? #ffffff : #cbd5e1;
+                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                    }
+                    TouchArea { clicked => { root.show-settings = !root.show-settings; } }
+                }
+
+                // Snapshot Button
+                Rectangle {
+                    width: 36px; height: 36px;
+                    background: #141c2e;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #23314d;
+
+                    Text {
+                        text: "SNAP";
+                        font-size: 9px; font-weight: 800;
+                        color: #f59e0b;
+                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                    }
+                    TouchArea { clicked => { root.take-snapshot(); } }
+                }
+
+                // REC Button (God Tier glowing action pill)
+                rec_btn := Rectangle {
+                    width: 110px; height: 36px;
+                    background: root.is-recording ? #ff3b30 : (rec_touch.has-hover ? #00e65c : #00ff66);
+                    border-radius: 10px;
+
+                    animate background { duration: 120ms; }
+
+                    HorizontalLayout {
+                        alignment: center;
+                        spacing: 6px;
+
+                        Rectangle {
+                            width: 8px; height: 8px;
+                            background: root.is-recording ? #ffffff : #000000;
+                            border-radius: 4px;
+                            y: (parent.height - self.height)/2;
+                        }
+
+                        Text {
+                            text: root.lang == "ro" ? 
+                                (root.is-recording ? "STOP" : "REC") : 
+                                (root.is-recording ? "STOP" : "REC");
+                            font-size: 12px; font-weight: 900;
+                            color: root.is-recording ? #ffffff : #000000;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    rec_touch := TouchArea { clicked => { root.toggle-recording(); } }
+                }
+            }
+
+            // Row 2: Status & Support Strip
+            HorizontalLayout {
+                padding-left: 4px; padding-right: 4px;
+                alignment: space-between;
+
+                // Status text
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: center;
+
+                    Rectangle {
+                        width: 6px; height: 6px;
+                        background: root.is-recording ? #ff3b30 : #00ff66;
+                        border-radius: 3px;
+                        y: (parent.height - self.height)/2;
+                    }
+
+                    Text {
+                        text: (root.lang == "ro" ? "STARE: " : "STATUS: ") + root.status-message;
+                        font-size: 10px;
+                        font-weight: 700;
+                        color: #94a3b8;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Support button
+                Rectangle {
+                    height: 22px;
+                    background: #6366f1;
+                    border-radius: 6px;
+
+                    HorizontalLayout {
+                        padding-left: 8px; padding-right: 8px;
+                        alignment: center;
+
+                        Text {
+                            text: root.lang == "ro" ? "💖 SUSȚINE DEZVOLTATORUL" : "💖 SUPPORT THE DEV";
+                            font-size: 9px; font-weight: 800; color: #ffffff;
+                            vertical-alignment: center;
+                        }
+                    }
+                    TouchArea { clicked => { root.show-support-modal = true; } }
+                }
+            }
+
+            // Row 3: Settings Popover Drawer (when toggled)
+            if (root.show-settings) : Rectangle {
+                height: 48px;
+                background: #141c2e;
+                border-radius: 10px;
+                border-width: 1px;
+                border-color: #3b82f6;
+
+                HorizontalLayout {
+                    padding: 8px; spacing: 12px; alignment: center;
+
+                    Text {
+                        text: root.lang == "ro" ? "FILIGRAN AUTOMAT:" : "AUTO WATERMARK:";
+                        font-size: 10px; font-weight: 800; color: #cbd5e1; vertical-alignment: center;
+                    }
+                    Rectangle {
+                        width: 44px; height: 24px;
+                        background: root.watermark-enabled ? #00ff66 : #334155;
+                        border-radius: 12px;
+                        Text { text: root.watermark-enabled ? "ON" : "OFF"; font-size: 9px; font-weight: 900; color: #000; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                        TouchArea { clicked => { root.watermark-enabled = !root.watermark-enabled; } }
+                    }
+
+                    Rectangle { width: 1px; height: 20px; background: #334155; }
+
+                    Text {
+                        text: root.lang == "ro" ? "FOCALIZARE ZOOM:" : "CINEMATIC FOCUS:";
+                        font-size: 10px; font-weight: 800; color: #cbd5e1; vertical-alignment: center;
+                    }
+                    Rectangle {
+                        width: 44px; height: 24px;
+                        background: root.cinematic-zoom-enabled ? #00ff66 : #334155;
+                        border-radius: 12px;
+                        Text { text: root.cinematic-zoom-enabled ? "ON" : "OFF"; font-size: 9px; font-weight: 900; color: #000; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                        TouchArea { clicked => { root.cinematic-zoom-enabled = !root.cinematic-zoom-enabled; } }
+                    }
+                }
+            }
+
+            // Row 4: Support Modal Drawer
+            if (root.show-support-modal) : Rectangle {
+                height: 48px;
+                background: #1e1b4b;
+                border-radius: 10px;
+                border-width: 1px;
+                border-color: #818cf8;
+
+                HorizontalLayout {
+                    padding: 8px; spacing: 10px; alignment: center;
+
+                    Text {
+                        text: root.lang == "ro" ? 
+                            "Licență Enterprise WOLFITWAYAGENCY SRL" : 
+                            "Enterprise Licensing WOLFITWAYAGENCY SRL";
+                        font-size: 10px; font-weight: 700; color: #e0e7ff; vertical-alignment: center;
+                    }
+
+                    Rectangle {
+                        height: 26px;
+                        background: #6366f1;
+                        border-radius: 6px;
+
+                        HorizontalLayout {
+                            padding-left: 10px; padding-right: 10px;
+                            alignment: center;
+
+                            Text {
+                                text: root.lang == "ro" ? "💳 Deschide Paddle Checkout" : "💳 Open Paddle Checkout";
+                                font-size: 10px; font-weight: 800; color: #ffffff;
+                                vertical-alignment: center;
+                            }
+                        }
+                        TouchArea { 
+                            clicked => { 
+                                root.open-paddle-checkout();
+                                root.show-support-modal = false;
+                            } 
+                        }
+                    }
+
+                    Rectangle {
+                        width: 22px; height: 22px;
+                        background: #312e81;
+                        border-radius: 11px;
+                        Text { text: "✕"; font-size: 10px; color: #ffffff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                        TouchArea { clicked => { root.show-support-modal = false; } }
+                    }
+                }
+            }
+        }
+    }
+}
