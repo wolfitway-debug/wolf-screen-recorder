@@ -1,12 +1,14 @@
+import { LineEdit } from "std-widgets.slint";
+
 export component SettingsModal inherits Rectangle {
-    width: 700px;
-    height: 440px;
+    width: 740px;
+    height: 460px;
     background: #080c14;
     border-radius: 20px;
     border-width: 1.5px;
-    border-color: #3b82f6;
-    drop-shadow-blur: 32px;
-    drop-shadow-color: #3b82f635;
+    border-color: #22d45e35;
+    drop-shadow-blur: 36px;
+    drop-shadow-color: #22d45e20;
 
     in-out property <string> active-tab: "general";
     in-out property <string> active-lang: "en";
@@ -16,6 +18,12 @@ export component SettingsModal inherits Rectangle {
     in-out property <bool> auto-watermark: true;
     in-out property <bool> cinematic-zoom: true;
     in-out property <bool> show-lang-dropdown: false;
+
+    // Customizable Hotkey Properties
+    in-out property <string> hotkey-record: "Super+Shift+R";
+    in-out property <string> hotkey-snapshot: "Super+Shift+S";
+    in-out property <string> hotkey-region: "Super+Shift+X";
+    in-out property <string> hotkey-cancel: "Escape";
 
     callback close-settings();
     callback select-language(string);
@@ -34,21 +42,22 @@ export component SettingsModal inherits Rectangle {
                 spacing: 8px;
                 alignment: center;
 
+                Text { text: "⚙"; font-size: 16px; color: #38bdf8; vertical-alignment: center; }
                 Text {
-                    text: "⚙ PREFERENCES & HARDWARE TUNING";
-                    font-size: 13px; font-weight: 900; color: #38bdf8;
+                    text: "PREFERENCES & SYSTEM CONFIGURATION";
+                    font-size: 13px; font-weight: 900; color: #f8fafc;
                     vertical-alignment: center;
                 }
             }
 
             close_btn := Rectangle {
-                width: 30px; height: 30px;
-                background: close_t.has-hover ? #1e293b : #0f1623;
-                border-radius: 15px;
+                width: 32px; height: 32px;
+                background: close_t.has-hover ? #ef4444 : #161e2e;
+                border-radius: 16px;
                 animate background { duration: 100ms; }
 
                 Text {
-                    text: "✕"; font-size: 13px; color: #94a3b8;
+                    text: "✕"; font-size: 13px; color: #f8fafc;
                     x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
                 }
                 close_t := TouchArea { clicked => { root.close-settings(); } }
@@ -63,7 +72,7 @@ export component SettingsModal inherits Rectangle {
 
             // Left Navigation Sidebar
             Rectangle {
-                width: 150px;
+                width: 160px;
                 background: #0f1623;
                 border-radius: 14px;
                 border-width: 1px;
@@ -76,8 +85,8 @@ export component SettingsModal inherits Rectangle {
 
                     // Tab 1: General
                     t_gen := Rectangle {
-                        height: 36px;
-                        background: root.active-tab == "general" ? #3b82f6 : (t_gen_t.has-hover ? #161e2e : transparent);
+                        height: 38px;
+                        background: root.active-tab == "general" ? #22d45e : (t_gen_t.has-hover ? #161e2e : transparent);
                         border-radius: 8px;
                         animate background { duration: 100ms; }
 
@@ -86,7 +95,7 @@ export component SettingsModal inherits Rectangle {
                             Text {
                                 text: "🌐 General & Lang";
                                 font-size: 10px; font-weight: 800;
-                                color: root.active-tab == "general" ? #ffffff : #94a3b8;
+                                color: root.active-tab == "general" ? #000000 : #f8fafc;
                                 vertical-alignment: center;
                             }
                         }
@@ -95,8 +104,8 @@ export component SettingsModal inherits Rectangle {
 
                     // Tab 2: Hardware
                     t_hw := Rectangle {
-                        height: 36px;
-                        background: root.active-tab == "hardware" ? #3b82f6 : (t_hw_t.has-hover ? #161e2e : transparent);
+                        height: 38px;
+                        background: root.active-tab == "hardware" ? #22d45e : (t_hw_t.has-hover ? #161e2e : transparent);
                         border-radius: 8px;
                         animate background { duration: 100ms; }
 
@@ -105,17 +114,36 @@ export component SettingsModal inherits Rectangle {
                             Text {
                                 text: "⚡ GPU & Encoder";
                                 font-size: 10px; font-weight: 800;
-                                color: root.active-tab == "hardware" ? #ffffff : #94a3b8;
+                                color: root.active-tab == "hardware" ? #000000 : #f8fafc;
                                 vertical-alignment: center;
                             }
                         }
                         t_hw_t := TouchArea { clicked => { root.active-tab = "hardware"; } }
                     }
 
-                    // Tab 3: Storage
+                    // Tab 3: Shortcuts
+                    t_hk := Rectangle {
+                        height: 38px;
+                        background: root.active-tab == "shortcuts" ? #22d45e : (t_hk_t.has-hover ? #161e2e : transparent);
+                        border-radius: 8px;
+                        animate background { duration: 100ms; }
+
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px; alignment: center;
+                            Text {
+                                text: "⌨️ Shortcuts";
+                                font-size: 10px; font-weight: 800;
+                                color: root.active-tab == "shortcuts" ? #000000 : #f8fafc;
+                                vertical-alignment: center;
+                            }
+                        }
+                        t_hk_t := TouchArea { clicked => { root.active-tab = "shortcuts"; } }
+                    }
+
+                    // Tab 4: Storage
                     t_sto := Rectangle {
-                        height: 36px;
-                        background: root.active-tab == "storage" ? #3b82f6 : (t_sto_t.has-hover ? #161e2e : transparent);
+                        height: 38px;
+                        background: root.active-tab == "storage" ? #22d45e : (t_sto_t.has-hover ? #161e2e : transparent);
                         border-radius: 8px;
                         animate background { duration: 100ms; }
 
@@ -124,7 +152,7 @@ export component SettingsModal inherits Rectangle {
                             Text {
                                 text: "📁 Storage Paths";
                                 font-size: 10px; font-weight: 800;
-                                color: root.active-tab == "storage" ? #ffffff : #94a3b8;
+                                color: root.active-tab == "storage" ? #000000 : #f8fafc;
                                 vertical-alignment: center;
                             }
                         }
@@ -168,7 +196,7 @@ export component SettingsModal inherits Rectangle {
                                           (root.active-lang == "de" ? "🇩🇪 Deutsch (DE)" :
                                           (root.active-lang == "fr" ? "🇫🇷 Français (FR)" :
                                           (root.active-lang == "ja" ? "🇯🇵 日本語 (JA)" : "🇬🇧 English (EN)"))));
-                                    font-size: 11px; font-weight: 800; color: #ffffff;
+                                    font-size: 11px; font-weight: 800; color: #f8fafc;
                                     vertical-alignment: center;
                                 }
 
@@ -228,8 +256,8 @@ export component SettingsModal inherits Rectangle {
 
                             VerticalLayout {
                                 spacing: 2px;
-                                Text { text: "Automatic Showcase Watermark"; font-size: 11px; font-weight: 700; color: #ffffff; }
-                                Text { text: "Stamps WOLFITWAY branding on exported assets"; font-size: 9px; color: #64748b; }
+                                Text { text: "Automatic Showcase Watermark"; font-size: 11px; font-weight: 700; color: #f8fafc; }
+                                Text { text: "Stamps WOLFITWAY branding on exported assets"; font-size: 9px; color: #cbd5e1; }
                             }
 
                             // Switch Toggle Pill
@@ -303,7 +331,75 @@ export component SettingsModal inherits Rectangle {
                         }
                     }
 
-                    // Tab 3: Storage Paths
+                    // Tab 3: Customizable Shortcuts
+                    if (root.active-tab == "shortcuts") : VerticalLayout {
+                        spacing: 10px;
+
+                        Text { text: "GLOBAL KEYBOARD SHORTCUTS"; font-size: 9px; font-weight: 900; color: #38bdf8; }
+                        Text { text: "System-wide hotkeys active from any application:"; font-size: 9px; color: #cbd5e1; }
+
+                        VerticalLayout {
+                            spacing: 8px;
+
+                            // Hotkey 1: Toggle Recording
+                            HorizontalLayout {
+                                alignment: space-between;
+                                Text { text: "🔴 Toggle Video Recording:"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                                Rectangle {
+                                    width: 160px; height: 32px;
+                                    background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                    LineEdit {
+                                        text: root.hotkey-record;
+                                        edited(t) => { root.hotkey-record = t; }
+                                    }
+                                }
+                            }
+
+                            // Hotkey 2: Instant Snapshot
+                            HorizontalLayout {
+                                alignment: space-between;
+                                Text { text: "📸 Instant Snapshot:"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                                Rectangle {
+                                    width: 160px; height: 32px;
+                                    background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                    LineEdit {
+                                        text: root.hotkey-snapshot;
+                                        edited(t) => { root.hotkey-snapshot = t; }
+                                    }
+                                }
+                            }
+
+                            // Hotkey 3: Region Select
+                            HorizontalLayout {
+                                alignment: space-between;
+                                Text { text: "✂️ Region Selector:"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                                Rectangle {
+                                    width: 160px; height: 32px;
+                                    background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                    LineEdit {
+                                        text: root.hotkey-region;
+                                        edited(t) => { root.hotkey-region = t; }
+                                    }
+                                }
+                            }
+
+                            // Hotkey 4: Cancel
+                            HorizontalLayout {
+                                alignment: space-between;
+                                Text { text: "✕ Cancel / Abort Modal:"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                                Rectangle {
+                                    width: 160px; height: 32px;
+                                    background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                    LineEdit {
+                                        text: root.hotkey-cancel;
+                                        edited(t) => { root.hotkey-cancel = t; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Tab 4: Storage Paths
                     if (root.active-tab == "storage") : VerticalLayout {
                         spacing: 12px;
 
@@ -327,7 +423,7 @@ export component SettingsModal inherits Rectangle {
 
             Text {
                 text: "Config stored at ~/.config/wolf-screen-recorder/config.json";
-                font-size: 9px; color: #64748b; vertical-alignment: center;
+                font-size: 9px; color: #cbd5e1; vertical-alignment: center;
             }
 
             save_btn := Rectangle {

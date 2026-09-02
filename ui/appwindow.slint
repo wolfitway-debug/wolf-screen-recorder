@@ -42,6 +42,12 @@ export component AppWindow inherits Window {
     in-out property <bool> watermark-enabled: true;
     in-out property <bool> cinematic-zoom-enabled: true;
 
+    // Customizable Hotkey Properties
+    in-out property <string> hotkey-record: "Super+Shift+R";
+    in-out property <string> hotkey-snapshot: "Super+Shift+S";
+    in-out property <string> hotkey-region: "Super+Shift+X";
+    in-out property <string> hotkey-cancel: "Escape";
+
     // Callbacks
     callback select-primary-mode(string);
     callback toggle-recording();
@@ -392,6 +398,10 @@ export component AppWindow inherits Window {
             watermark-text: root.watermark-text;
             auto-watermark: root.watermark-enabled;
             cinematic-zoom: root.cinematic-zoom-enabled;
+            hotkey-record: root.hotkey-record;
+            hotkey-snapshot: root.hotkey-snapshot;
+            hotkey-region: root.hotkey-region;
+            hotkey-cancel: root.hotkey-cancel;
             close-settings => { root.show-settings-modal = false; }
             select-language(l) => { root.select-language(l); }
             select-encoder(e) => { root.select-encoder(e); }

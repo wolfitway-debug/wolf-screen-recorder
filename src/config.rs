@@ -16,6 +16,12 @@ pub struct AppConfig {
     pub auto_watermark: bool,
     pub cinematic_zoom: bool,
     pub paddle_checkout_url: String,
+
+    // Customizable Global Shortcuts
+    pub hotkey_toggle_record: String,
+    pub hotkey_snapshot: String,
+    pub hotkey_region_select: String,
+    pub hotkey_cancel: String,
 }
 
 impl Default for AppConfig {
@@ -39,6 +45,12 @@ impl Default for AppConfig {
             auto_watermark: true,
             cinematic_zoom: true,
             paddle_checkout_url: "https://buy.paddle.com/placeholder-wolfitway".to_string(),
+
+            // Default Global Shortcuts
+            hotkey_toggle_record: "Super+Shift+R".to_string(),
+            hotkey_snapshot: "Super+Shift+S".to_string(),
+            hotkey_region_select: "Super+Shift+X".to_string(),
+            hotkey_cancel: "Escape".to_string(),
         }
     }
 }

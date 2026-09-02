@@ -50,6 +50,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_watermark_text(cfg.watermark_text.as_str().into());
         ui.set_watermark_enabled(cfg.auto_watermark);
         ui.set_cinematic_zoom_enabled(cfg.cinematic_zoom);
+        ui.set_hotkey_record(cfg.hotkey_toggle_record.as_str().into());
+        ui.set_hotkey_snapshot(cfg.hotkey_snapshot.as_str().into());
+        ui.set_hotkey_region(cfg.hotkey_region_select.as_str().into());
+        ui.set_hotkey_cancel(cfg.hotkey_cancel.as_str().into());
 
         i18n.lock().unwrap().set_language(&cfg.language);
     }
@@ -249,6 +253,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.watermark_text = ui.get_watermark_text().as_str().to_string();
         cfg.auto_watermark = ui.get_watermark_enabled();
         cfg.cinematic_zoom = ui.get_cinematic_zoom_enabled();
+        cfg.hotkey_toggle_record = ui.get_hotkey_record().as_str().to_string();
+        cfg.hotkey_snapshot = ui.get_hotkey_snapshot().as_str().to_string();
+        cfg.hotkey_region_select = ui.get_hotkey_region().as_str().to_string();
+        cfg.hotkey_cancel = ui.get_hotkey_cancel().as_str().to_string();
         cfg.save();
     });
 
