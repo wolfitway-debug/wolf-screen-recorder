@@ -1,6 +1,6 @@
 export component StudioEditor inherits Rectangle {
-    width: 680px;
-    height: 420px;
+    width: 780px;
+    height: 520px;
     background: #0b0f19;
     border-radius: 18px;
     border-width: 1.5px;
@@ -9,12 +9,15 @@ export component StudioEditor inherits Rectangle {
     drop-shadow-color: #00ff6640;
 
     in-out property <string> active-tool: "arrow";
-    in-out property <string> preview-path: "";
+    in-out property <image> canvas-image;
+    in-out property <bool> has-canvas-image: false;
     in-out property <bool> watermark-active: true;
     in-out property <string> status-text: "Studio Editor Ready";
 
     callback close-editor();
     callback select-tool(string);
+    callback open-file-dialog();
+    callback copy-clipboard();
     callback apply-blur-region(int, int, int, int);
     callback save-editor-snapshot();
 
@@ -115,18 +118,34 @@ export component StudioEditor inherits Rectangle {
                     }
                     TouchArea { clicked => { root.watermark-active = !root.watermark-active; } }
                 }
+
+                // Open File Button
+                Rectangle {
+                    height: 34px; background: #1e293b; border-radius: 7px; border-width: 1px; border-color: #3b82f6;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; alignment: center;
+                        Text { text: "📂 OPEN FILE"; font-size: 9px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.open-file-dialog(); } }
+                }
             }
         }
 
-        // Interactive Canvas Preview Container
+        // Interactive Canvas Container with slint::Image Buffer Rendering
         canvas_box := Rectangle {
             background: #141c2e;
             border-radius: 12px;
             border-width: 1px;
             border-color: #23314d;
 
-            Text {
-                text: "✨ Click & drag on canvas to apply " + root.active-tool + " annotation";
+            if (root.has-canvas-image) : Image {
+                source: root.canvas-image;
+                width: 100%;
+                height: 100%;
+            }
+
+            if (!root.has-canvas-image) : Text {
+                text: "✨ Click '📂 OPEN FILE' or capture a snapshot to preview & annotate";
                 font-size: 12px; color: #64748b; font-weight: 700;
                 x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
             }
@@ -161,6 +180,16 @@ export component StudioEditor inherits Rectangle {
 
             HorizontalLayout {
                 spacing: 8px;
+
+                Rectangle {
+                    height: 34px;
+                    background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #334155;
+                    HorizontalLayout {
+                        padding-left: 12px; padding-right: 12px; alignment: center;
+                        Text { text: "📋 COPY"; font-size: 10px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.copy-clipboard(); } }
+                }
 
                 Rectangle {
                     height: 34px;

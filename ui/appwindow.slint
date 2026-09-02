@@ -2,8 +2,8 @@ import { SettingsModal } from "settings.slint";
 import { StudioEditor } from "editor.slint";
 
 export component AppWindow inherits Window {
-    width: 740px;
-    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 480px : 86px);
+    width: root.show-settings-modal ? 660px : (root.show-editor-modal ? 800px : 740px);
+    height: root.show-settings-modal ? 420px : (root.show-editor-modal ? 540px : 86px);
     no-frame: true;
     background: transparent;
     always-on-top: true;
@@ -16,9 +16,13 @@ export component AppWindow inherits Window {
     in-out property <bool> webcam-enabled: false;
     
     // Hardware & Bilingual Localization State
-    in-out property <string> lang: "en"; // "en", "ro", "es", "de", "fr", "ja"
+    in-out property <string> lang: "en";
     in-out property <string> hw-encoder-tag: "[HW-AUTO]";
     in-out property <string> status-message: "Ready";
+
+    // Canvas Image Properties
+    in-out property <image> canvas-image;
+    in-out property <bool> has-canvas-image: false;
 
     // Modal Display Controls
     in-out property <bool> show-settings-modal: false;
@@ -44,12 +48,14 @@ export component AppWindow inherits Window {
     callback select-language(string);
     callback select-encoder(string);
     callback save-config();
+    callback open-file-dialog();
+    callback copy-clipboard();
     callback apply-blur-region(int, int, int, int);
     callback save-editor-export();
     callback open-paddle-checkout();
     callback move-window(length, length);
 
-    // Main Glass Floating Toolbar Container
+    // Main Floating Card View
     Rectangle {
         width: 100%;
         height: 100%;
@@ -78,7 +84,8 @@ export component AppWindow inherits Window {
             }
         }
 
-        VerticalLayout {
+        // View 1: Main Floating Recorder Toolbar
+        if (!root.show-settings-modal && !root.show-editor-modal) : VerticalLayout {
             padding: 10px;
             spacing: 8px;
 
@@ -87,7 +94,7 @@ export component AppWindow inherits Window {
                 spacing: 8px;
                 alignment: space-between;
 
-                // Logo & Drag Handle Badge
+                // Logo Badge
                 Rectangle {
                     height: 36px;
                     background: #141c2e;
@@ -252,7 +259,7 @@ export component AppWindow inherits Window {
                         color: root.show-editor-modal ? #000000 : #00ff66;
                         x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
                     }
-                    TouchArea { clicked => { root.show-editor-modal = !root.show-editor-modal; } }
+                    TouchArea { clicked => { root.open-studio-editor(); } }
                 }
 
                 // Settings Button (Opens Full Preferences Modal)
@@ -365,29 +372,38 @@ export component AppWindow inherits Window {
                     TouchArea { clicked => { root.show-support-modal = true; } }
                 }
             }
+        }
 
-            // Modal Overlay 1: Full Settings Page
-            if (root.show-settings-modal) : SettingsModal {
-                active-lang: root.lang;
-                active-encoder: root.active-encoder;
-                save-path: root.save-path;
-                watermark-text: root.watermark-text;
-                auto-watermark: root.watermark-enabled;
-                cinematic-zoom: root.cinematic-zoom-enabled;
+        // View 2: Dedicated Full Settings Modal View
+        if (root.show-settings-modal) : SettingsModal {
+            width: 100%;
+            height: 100%;
+            active-lang: root.lang;
+            active-encoder: root.active-encoder;
+            save-path: root.save-path;
+            watermark-text: root.watermark-text;
+            auto-watermark: root.watermark-enabled;
+            cinematic-zoom: root.cinematic-zoom-enabled;
 
-                close-settings => { root.show-settings-modal = false; }
-                select-language(l) => { root.select-language(l); }
-                select-encoder(e) => { root.select-encoder(e); }
-                save-settings => { root.save-config(); }
-            }
+            close-settings => { root.show-settings-modal = false; }
+            select-language(l) => { root.select-language(l); }
+            select-encoder(e) => { root.select-encoder(e); }
+            save-settings => { root.save-config(); }
+        }
 
-            // Modal Overlay 2: Studio Showcase Editor Canvas
-            if (root.show-editor-modal) : StudioEditor {
-                watermark-active: root.watermark-enabled;
-                close-editor => { root.show-editor-modal = false; }
-                apply-blur-region(x, y, w, h) => { root.apply-blur-region(x, y, w, h); }
-                save-editor-snapshot => { root.save-editor-export(); }
-            }
+        // View 3: Dedicated Full Studio Editor Canvas View
+        if (root.show-editor-modal) : StudioEditor {
+            width: 100%;
+            height: 100%;
+            canvas-image: root.canvas-image;
+            has-canvas-image: root.has-canvas-image;
+            watermark-active: root.watermark-enabled;
+
+            close-editor => { root.show-editor-modal = false; }
+            open-file-dialog => { root.open-file-dialog(); }
+            copy-clipboard => { root.copy-clipboard(); }
+            apply-blur-region(x, y, w, h) => { root.apply-blur-region(x, y, w, h); }
+            save-editor-snapshot => { root.save-editor-export(); }
         }
     }
 }

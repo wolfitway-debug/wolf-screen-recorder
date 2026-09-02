@@ -7,20 +7,29 @@ mod focus;
 mod config;
 mod i18n;
 mod editor;
+mod hotkeys;
+mod region;
 
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::process::Command;
+use image::RgbaImage;
 
 use hardware::HardwareProfile;
 use focus::FocusTracker;
 use config::AppConfig;
 use i18n::I18nEngine;
+use editor::EditorEngine;
+use hotkeys::{HotkeyCommand, HotkeyDaemon};
 
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
+
+    // Active image buffer in memory for Studio Editor
+    let active_image_buffer: Arc<Mutex<Option<RgbaImage>>> = Arc::new(Mutex::new(None));
 
     // Load persistent configuration and i18n localization engine
     let config = Arc::new(Mutex::new(AppConfig::load()));
@@ -50,6 +59,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     ui.set_status_message(initial_status.into());
 
     let focus_tracker = FocusTracker::new();
+
+    // Module 1: Start Global System-Wide Hotkey Daemon thread (Super + Shift + R/S/X)
+    let (hotkey_tx, hotkey_rx) = channel::<HotkeyCommand>();
+    HotkeyDaemon::start(hotkey_tx);
+
+    // Cross-thread Hotkey Command Dispatcher channel receiver thread
+    let ui_weak_hotkey = ui.as_weak();
+    std::thread::spawn(move || {
+        while let Ok(cmd) = hotkey_rx.recv() {
+            let ui_weak = ui_weak_hotkey.clone();
+            let _ = slint::invoke_from_event_loop(move || {
+                if let Some(ui) = ui_weak.upgrade() {
+                    match cmd {
+                        HotkeyCommand::ToggleRecord => {
+                            println!("[HotkeyDispatcher] Toggling recording via Global Shortcut!");
+                            ui.invoke_toggle_recording();
+                        }
+                        HotkeyCommand::Snapshot => {
+                            println!("[HotkeyDispatcher] Taking instant snapshot via Global Shortcut!");
+                            ui.invoke_take_snapshot();
+                            ui.invoke_open_studio_editor();
+                        }
+                        HotkeyCommand::RegionSelect => {
+                            println!("[HotkeyDispatcher] Opening Region Selector via Global Shortcut!");
+                            ui.set_selected_mode("region".into());
+                        }
+                        HotkeyCommand::Cancel => {
+                            ui.set_show_settings_modal(false);
+                            ui.set_show_editor_modal(false);
+                        }
+                    }
+                }
+            });
+        }
+    });
 
     // Window position dragging handler
     let ui_handle = ui.as_weak();
@@ -86,10 +130,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             i.t("status_ready")
         };
         ui.set_status_message(status_msg.into());
-        println!("[Main] Cycled language to: {}", next);
     });
 
-    // Select specific language from Settings modal
+    // Select specific language from Settings modal dropdown
     let i18n_clone = i18n.clone();
     let config_clone = config.clone();
     let ui_handle = ui.as_weak();
@@ -124,27 +167,85 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.auto_watermark = ui.get_watermark_enabled();
         cfg.cinematic_zoom = ui.get_cinematic_zoom_enabled();
         cfg.save();
-        println!("[Main] Updated configuration saved successfully.");
+    });
+
+    // Open External Image File Picker Handler
+    let active_img_clone = active_image_buffer.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_open_file_dialog(move || {
+        let ui = ui_handle.unwrap();
+        if let Some(path) = EditorEngine::pick_image_file() {
+            if let Ok(rgba) = EditorEngine::load_image(&path) {
+                let slint_img = EditorEngine::rgba_to_slint_image(&rgba);
+                ui.set_canvas_image(slint_img);
+                ui.set_has_canvas_image(true);
+                ui.set_show_editor_modal(true);
+                *active_img_clone.lock().unwrap() = Some(rgba);
+                println!("[EditorEngine] Loaded image file from disk: {:?}", path);
+            }
+        }
+    });
+
+    // Copy Snapshot to Clipboard Handler
+    let active_img_clone = active_image_buffer.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_copy_clipboard(move || {
+        let ui = ui_handle.unwrap();
+        if let Some(rgba) = active_img_clone.lock().unwrap().as_ref() {
+            if let Ok(()) = EditorEngine::copy_to_clipboard(rgba) {
+                ui.set_status_message("Copied snapshot to clipboard!".into());
+            }
+        }
+    });
+
+    // Open Studio Editor Handler
+    let active_img_clone = active_image_buffer.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_open_studio_editor(move || {
+        let ui = ui_handle.unwrap();
+        if active_img_clone.lock().unwrap().is_none() {
+            if let Ok(path) = capture::CaptureEngine::save_screenshot(Some("WOLFITWAY")) {
+                if let Ok(rgba) = EditorEngine::load_image(&path) {
+                    let slint_img = EditorEngine::rgba_to_slint_image(&rgba);
+                    ui.set_canvas_image(slint_img);
+                    ui.set_has_canvas_image(true);
+                    *active_img_clone.lock().unwrap() = Some(rgba);
+                }
+            }
+        } else if let Some(rgba) = active_img_clone.lock().unwrap().as_ref() {
+            let slint_img = EditorEngine::rgba_to_slint_image(rgba);
+            ui.set_canvas_image(slint_img);
+            ui.set_has_canvas_image(true);
+        }
+        ui.set_show_editor_modal(true);
     });
 
     // Interactive Canvas Redaction Handler
+    let active_img_clone = active_image_buffer.clone();
     let ui_handle = ui.as_weak();
     ui.on_apply_blur_region(move |x, y, w, h| {
         let ui = ui_handle.unwrap();
-        println!("[EditorEngine] Applied interactive redaction box at ({}, {}) size {}x{}", x, y, w, h);
-        ui.set_status_message(format!("Applied redaction area at {},{}", x, y).into());
+        if let Some(rgba) = active_img_clone.lock().unwrap().as_mut() {
+            EditorEngine::apply_blur_redaction(rgba, x, y, w as u32, h as u32);
+            let updated_slint_img = EditorEngine::rgba_to_slint_image(rgba);
+            ui.set_canvas_image(updated_slint_img);
+        }
     });
 
     // Interactive Studio Export Handler
     let config_clone = config.clone();
+    let active_img_clone = active_image_buffer.clone();
     let ui_handle = ui.as_weak();
     ui.on_save_editor_export(move || {
         let ui = ui_handle.unwrap();
-        let _save_dir = config_clone.lock().unwrap().save_directory.clone();
-        if let Ok(path) = capture::CaptureEngine::save_screenshot(Some("WOLFITWAY")) {
-            println!("[EditorEngine] Exported edited showcase asset to: {:?}", path);
-            ui.set_status_message(format!("Exported to {:?}", path.file_name().unwrap()).into());
-            ui.set_show_editor_modal(false);
+        let save_dir = config_clone.lock().unwrap().save_directory.clone();
+        if let Some(rgba) = active_img_clone.lock().unwrap().as_ref() {
+            let dyn_img = image::DynamicImage::ImageRgba8(rgba.clone());
+            if let Ok(path) = EditorEngine::export_edited_snapshot(&dyn_img, &save_dir) {
+                println!("[EditorEngine] Exported edited showcase asset to: {:?}", path);
+                ui.set_status_message(format!("Exported to {:?}", path.file_name().unwrap()).into());
+                ui.set_show_editor_modal(false);
+            }
         }
     });
 
@@ -152,7 +253,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config_clone = config.clone();
     ui.on_open_paddle_checkout(move || {
         let url = config_clone.lock().unwrap().paddle_checkout_url.clone();
-        println!("[Paddle] Opening corporate checkout rails: {}", url);
         if let Err(e) = open::that(&url) {
             eprintln!("[Paddle] Failed to open browser link: {}", e);
         }
@@ -272,6 +372,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     // Snapshot Handler
+    let active_img_clone = active_image_buffer.clone();
     let ui_handle = ui.as_weak();
     let i18n_clone = i18n.clone();
     ui.on_take_snapshot(move || {
@@ -280,6 +381,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match capture::CaptureEngine::save_screenshot(wm) {
             Ok(path) => {
                 println!("Saved screenshot with watermark to: {:?}", path);
+                if let Ok(rgba) = EditorEngine::load_image(&path) {
+                    let slint_img = EditorEngine::rgba_to_slint_image(&rgba);
+                    ui.set_canvas_image(slint_img);
+                    ui.set_has_canvas_image(true);
+                    *active_img_clone.lock().unwrap() = Some(rgba);
+                }
                 let msg = i18n_clone.lock().unwrap().t("status_complete");
                 ui.set_status_message(msg.into());
             }

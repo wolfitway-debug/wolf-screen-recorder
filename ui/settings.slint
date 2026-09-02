@@ -1,5 +1,5 @@
 export component SettingsModal inherits Rectangle {
-    width: 620px;
+    width: 640px;
     height: 380px;
     background: #0f172a;
     border-radius: 16px;
@@ -15,6 +15,7 @@ export component SettingsModal inherits Rectangle {
     in-out property <string> watermark-text: "WOLFITWAY";
     in-out property <bool> auto-watermark: true;
     in-out property <bool> cinematic-zoom: true;
+    in-out property <bool> show-lang-dropdown: false;
 
     callback close-settings();
     callback select-language(string);
@@ -96,51 +97,76 @@ export component SettingsModal inherits Rectangle {
                 if (root.active-tab == "general") : VerticalLayout {
                     spacing: 10px;
 
-                    Text { text: "Language Selection:"; font-size: 11px; font-weight: 700; color: #94a3b8; }
+                    Text { text: "Interface Language:"; font-size: 11px; font-weight: 700; color: #94a3b8; }
 
-                    HorizontalLayout {
-                        spacing: 6px;
+                    // Custom Flag Language Select Dropdown
+                    Rectangle {
+                        height: 36px;
+                        background: #0f172a;
+                        border-radius: 8px;
+                        border-width: 1.2px;
+                        border-color: #3b82f6;
 
-                        Rectangle {
-                            width: 50px; height: 32px;
-                            background: root.active-lang == "en" ? #00ff66 : #0f172a; border-radius: 6px;
-                            Text { text: "🇬🇧 EN"; font-size: 10px; font-weight: 800; color: root.active-lang == "en" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                            TouchArea { clicked => { root.select-language("en"); } }
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px;
+                            alignment: space-between;
+
+                            Text {
+                                text: root.active-lang == "ro" ? "🇷🇴 Română" :
+                                      (root.active-lang == "es" ? "🇪🇸 Español" :
+                                      (root.active-lang == "de" ? "🇩🇪 Deutsch" :
+                                      (root.active-lang == "fr" ? "🇫🇷 Français" :
+                                      (root.active-lang == "ja" ? "🇯🇵 日本語" : "🇬🇧 English"))));
+                                font-size: 11px; font-weight: 800; color: #ffffff;
+                                vertical-alignment: center;
+                            }
+
+                            Text { text: "▼"; font-size: 10px; color: #3b82f6; vertical-alignment: center; }
                         }
 
-                        Rectangle {
-                            width: 50px; height: 32px;
-                            background: root.active-lang == "ro" ? #00ff66 : #0f172a; border-radius: 6px;
-                            Text { text: "🇷🇴 RO"; font-size: 10px; font-weight: 800; color: root.active-lang == "ro" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                            TouchArea { clicked => { root.select-language("ro"); } }
-                        }
+                        TouchArea { clicked => { root.show-lang-dropdown = !root.show-lang-dropdown; } }
+                    }
 
-                        Rectangle {
-                            width: 50px; height: 32px;
-                            background: root.active-lang == "es" ? #00ff66 : #0f172a; border-radius: 6px;
-                            Text { text: "🇪🇸 ES"; font-size: 10px; font-weight: 800; color: root.active-lang == "es" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                            TouchArea { clicked => { root.select-language("es"); } }
-                        }
+                    // Dropdown Menu Popover
+                    if (root.show-lang-dropdown) : Rectangle {
+                        background: #0f172a;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #3b82f6;
 
-                        Rectangle {
-                            width: 50px; height: 32px;
-                            background: root.active-lang == "de" ? #00ff66 : #0f172a; border-radius: 6px;
-                            Text { text: "🇩🇪 DE"; font-size: 10px; font-weight: 800; color: root.active-lang == "de" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                            TouchArea { clicked => { root.select-language("de"); } }
-                        }
+                        VerticalLayout {
+                            padding: 6px; spacing: 4px;
 
-                        Rectangle {
-                            width: 50px; height: 32px;
-                            background: root.active-lang == "fr" ? #00ff66 : #0f172a; border-radius: 6px;
-                            Text { text: "🇫🇷 FR"; font-size: 10px; font-weight: 800; color: root.active-lang == "fr" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                            TouchArea { clicked => { root.select-language("fr"); } }
-                        }
-
-                        Rectangle {
-                            width: 50px; height: 32px;
-                            background: root.active-lang == "ja" ? #00ff66 : #0f172a; border-radius: 6px;
-                            Text { text: "🇯🇵 JA"; font-size: 10px; font-weight: 800; color: root.active-lang == "ja" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                            TouchArea { clicked => { root.select-language("ja"); } }
+                            Rectangle {
+                                height: 28px; background: root.active-lang == "en" ? #3b82f6 : transparent; border-radius: 5px;
+                                HorizontalLayout { padding-left: 10px; alignment: center; Text { text: "🇬🇧 English (EN)"; font-size: 10px; font-weight: 700; color: #fff; vertical-alignment: center; } }
+                                TouchArea { clicked => { root.select-language("en"); root.show-lang-dropdown = false; } }
+                            }
+                            Rectangle {
+                                height: 28px; background: root.active-lang == "ro" ? #3b82f6 : transparent; border-radius: 5px;
+                                HorizontalLayout { padding-left: 10px; alignment: center; Text { text: "🇷🇴 Română (RO)"; font-size: 10px; font-weight: 700; color: #fff; vertical-alignment: center; } }
+                                TouchArea { clicked => { root.select-language("ro"); root.show-lang-dropdown = false; } }
+                            }
+                            Rectangle {
+                                height: 28px; background: root.active-lang == "es" ? #3b82f6 : transparent; border-radius: 5px;
+                                HorizontalLayout { padding-left: 10px; alignment: center; Text { text: "🇪🇸 Español (ES)"; font-size: 10px; font-weight: 700; color: #fff; vertical-alignment: center; } }
+                                TouchArea { clicked => { root.select-language("es"); root.show-lang-dropdown = false; } }
+                            }
+                            Rectangle {
+                                height: 28px; background: root.active-lang == "de" ? #3b82f6 : transparent; border-radius: 5px;
+                                HorizontalLayout { padding-left: 10px; alignment: center; Text { text: "🇩🇪 Deutsch (DE)"; font-size: 10px; font-weight: 700; color: #fff; vertical-alignment: center; } }
+                                TouchArea { clicked => { root.select-language("de"); root.show-lang-dropdown = false; } }
+                            }
+                            Rectangle {
+                                height: 28px; background: root.active-lang == "fr" ? #3b82f6 : transparent; border-radius: 5px;
+                                HorizontalLayout { padding-left: 10px; alignment: center; Text { text: "🇫🇷 Français (FR)"; font-size: 10px; font-weight: 700; color: #fff; vertical-alignment: center; } }
+                                TouchArea { clicked => { root.select-language("fr"); root.show-lang-dropdown = false; } }
+                            }
+                            Rectangle {
+                                height: 28px; background: root.active-lang == "ja" ? #3b82f6 : transparent; border-radius: 5px;
+                                HorizontalLayout { padding-left: 10px; alignment: center; Text { text: "🇯🇵 日本語 (JA)"; font-size: 10px; font-weight: 700; color: #fff; vertical-alignment: center; } }
+                                TouchArea { clicked => { root.select-language("ja"); root.show-lang-dropdown = false; } }
+                            }
                         }
                     }
 

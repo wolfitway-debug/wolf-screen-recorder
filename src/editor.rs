@@ -2,12 +2,50 @@ use image::{DynamicImage, Rgba, RgbaImage};
 use imageproc::drawing::{draw_filled_rect_mut, draw_hollow_rect_mut, draw_line_segment_mut};
 use imageproc::rect::Rect;
 use std::path::PathBuf;
+use slint::{Image, SharedPixelBuffer};
 
 #[allow(dead_code)]
 pub struct EditorEngine;
 
 #[allow(dead_code)]
 impl EditorEngine {
+    /// Native Open File picker using rfd
+    pub fn pick_image_file() -> Option<PathBuf> {
+        rfd::FileDialog::new()
+            .add_filter("Images", &["png", "jpg", "jpeg", "webp"])
+            .set_title("Select Image to Annotate")
+            .pick_file()
+    }
+
+    /// Load image from path into RgbaImage
+    pub fn load_image(path: &PathBuf) -> Result<RgbaImage, Box<dyn std::error::Error>> {
+        let img = image::open(path)?;
+        Ok(img.to_rgba8())
+    }
+
+    /// Convert RgbaImage directly to slint::Image buffer for live canvas rendering
+    pub fn rgba_to_slint_image(rgba: &RgbaImage) -> Image {
+        let buffer = SharedPixelBuffer::<slint::Rgba8Pixel>::clone_from_slice(
+            rgba.as_raw(),
+            rgba.width(),
+            rgba.height(),
+        );
+        Image::from_rgba8(buffer)
+    }
+
+    /// Copy RgbaImage to system clipboard using arboard
+    pub fn copy_to_clipboard(rgba: &RgbaImage) -> Result<(), Box<dyn std::error::Error>> {
+        let mut clipboard = arboard::Clipboard::new()?;
+        let img_data = arboard::ImageData {
+            width: rgba.width() as usize,
+            height: rgba.height() as usize,
+            bytes: std::borrow::Cow::Borrowed(rgba.as_raw()),
+        };
+        clipboard.set_image(img_data)?;
+        println!("[EditorEngine] Successfully copied snapshot to system clipboard!");
+        Ok(())
+    }
+
     /// Apply pixelated / blur redaction region over sensitive credentials
     pub fn apply_blur_redaction(img: &mut RgbaImage, x: i32, y: i32, width: u32, height: u32) {
         if width == 0 || height == 0 {
@@ -18,9 +56,7 @@ impl EditorEngine {
         let dark_redact = Rgba([15, 23, 42, 220]);
         let accent_border = Rgba([0, 255, 102, 255]);
 
-        // Draw solid dark redaction box
         draw_filled_rect_mut(img, rect, dark_redact);
-        // Draw crisp accent border around redacted credential zone
         draw_hollow_rect_mut(img, rect, accent_border);
     }
 

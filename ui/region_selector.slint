@@ -1,0 +1,100 @@
+export component RegionSelectorWindow inherits Window {
+    no-frame: true;
+    background: transparent;
+    always-on-top: true;
+
+    in-out property <int> selection-x: 0;
+    in-out property <int> selection-y: 0;
+    in-out property <int> selection-w: 0;
+    in-out property <int> selection-h: 0;
+    in-out property <bool> is-selecting: false;
+
+    callback selection-confirmed(int, int, int, int);
+    callback selection-cancelled();
+
+    Rectangle {
+        width: 100%;
+        height: 100%;
+        background: #00000060;
+
+        TouchArea {
+            property <int> start-x;
+            property <int> start-y;
+
+            pointer-event(event) => {
+                if (event.button == PointerEventButton.left) {
+                    if (event.kind == PointerEventKind.down) {
+                        self.start-x = self.mouse-x / 1px;
+                        self.start-y = self.mouse-y / 1px;
+                        root.selection-x = self.start-x;
+                        root.selection-y = self.start-y;
+                        root.selection-w = 0;
+                        root.selection-h = 0;
+                        root.is-selecting = true;
+                    } else if (event.kind == PointerEventKind.up) {
+                        let end-x = self.mouse-x / 1px;
+                        let end-y = self.mouse-y / 1px;
+                        
+                        let final-x = self.start-x.min(end-x);
+                        let final-y = self.start-y.min(end-y);
+                        let final-w = (end-x - self.start-x).abs();
+                        let final-h = (end-y - self.start-y).abs();
+
+                        if (final-w > 10 && final-h > 10) {
+                            root.selection-confirmed(final-x, final-y, final-w, final-h);
+                        } else {
+                            root.selection-cancelled();
+                        }
+                    }
+                }
+            }
+
+            moved => {
+                if (root.is-selecting) {
+                    let cur-x = self.mouse-x / 1px;
+                    let cur-y = self.mouse-y / 1px;
+
+                    let min-x = self.start-x.min(cur-x);
+                    let min-y = self.start-y.min(cur-y);
+                    let w = (cur-x - self.start-x).abs();
+                    let h = (cur-y - self.start-y).abs();
+
+                    root.selection-x = min-x;
+                    root.selection-y = min-y;
+                    root.selection-w = w;
+                    root.selection-h = h;
+                }
+            }
+        }
+
+        // Rubber-Band Selection Rectangle Overlay
+        if (root.selection-w > 0 && root.selection-h > 0) : Rectangle {
+            x: root.selection-x * 1px;
+            y: root.selection-y * 1px;
+            width: root.selection-w * 1px;
+            height: root.selection-h * 1px;
+            background: #00ff6615;
+            border-width: 2px;
+            border-color: #00ff66;
+
+            // Dimension Feedback Badge
+            Rectangle {
+                x: 10px; y: 10px;
+                height: 22px;
+                background: #0b0f19;
+                border-radius: 6px;
+                border-width: 1px;
+                border-color: #00ff66;
+
+                HorizontalLayout {
+                    padding-left: 8px; padding-right: 8px; alignment: center;
+                    Text {
+                        text: "📐 " + root.selection-w + " × " + root.selection-h + " px";
+                        font-size: 10px; font-weight: 800; color: #00ff66;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+        }
+    }
+}
