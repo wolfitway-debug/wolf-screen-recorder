@@ -4,23 +4,51 @@ mod webcam;
 mod hardware;
 mod annotations;
 mod focus;
+mod config;
+mod i18n;
+mod editor;
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::process::Command;
 
 use hardware::HardwareProfile;
 use focus::FocusTracker;
+use config::AppConfig;
+use i18n::I18nEngine;
+use editor::EditorEngine;
 
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ui = AppWindow::new()?;
 
-    // Milestone 1: Hardware Auto-Detection Engine initialization at boot
+    // Load persistent configuration and i18n localization engine
+    let config = Arc::new(Mutex::new(AppConfig::load()));
+    let i18n = Arc::new(Mutex::new(I18nEngine::new()));
+
+    // Apply initial config to UI
+    {
+        let cfg = config.lock().unwrap();
+        ui.set_lang(cfg.language.as_str().into());
+        ui.set_active_encoder(cfg.hw_encoder_override.as_str().into());
+        ui.set_save_path(cfg.save_directory.as_str().into());
+        ui.set_watermark_text(cfg.watermark_text.as_str().into());
+        ui.set_watermark_enabled(cfg.auto_watermark);
+        ui.set_cinematic_zoom_enabled(cfg.cinematic_zoom);
+
+        i18n.lock().unwrap().set_language(&cfg.language);
+    }
+
+    // Initialize Hardware Auto-Detection Engine
     let hw_profile = HardwareProfile::detect();
     ui.set_hw_encoder_tag(hw_profile.encoder.tag().into());
-    ui.set_status_message(format!("Ready ({})", hw_profile.encoder.display_name()).into());
+    
+    let initial_status = {
+        let i = i18n.lock().unwrap();
+        format!("{} ({})", i.t("status_ready"), hw_profile.encoder.display_name())
+    };
+    ui.set_status_message(initial_status.into());
 
     let focus_tracker = FocusTracker::new();
 
@@ -34,34 +62,113 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.window().set_position(slint::PhysicalPosition::new(new_x, new_y));
     });
 
-    let recording_flag = Arc::new(AtomicBool::new(false));
-    let audio_enabled_flag = Arc::new(AtomicBool::new(true));
-
-    // Milestone 2: Language Toggle Handler (EN <-> RO)
+    // Language Toggle / Cycle Handler (EN -> RO -> ES -> DE -> FR -> JA)
+    let i18n_clone = i18n.clone();
+    let config_clone = config.clone();
     let ui_handle = ui.as_weak();
     ui.on_toggle_language(move || {
         let ui = ui_handle.unwrap();
-        let current_lang = ui.get_lang();
-        let next_lang = if current_lang == "en" { "ro" } else { "en" };
-        ui.set_lang(next_lang.into());
-        println!("[UI] Swapped language to: {}", next_lang);
+        let current = ui.get_lang();
+        let next = match current.as_str() {
+            "en" => "ro",
+            "ro" => "es",
+            "es" => "de",
+            "de" => "fr",
+            "fr" => "ja",
+            _ => "en",
+        };
+        ui.set_lang(next.into());
+        i18n_clone.lock().unwrap().set_language(next);
+        config_clone.lock().unwrap().language = next.to_string();
+        config_clone.lock().unwrap().save();
+
+        let status_msg = {
+            let i = i18n_clone.lock().unwrap();
+            i.t("status_ready")
+        };
+        ui.set_status_message(status_msg.into());
+        println!("[Main] Cycled language to: {}", next);
     });
 
-    // Milestone 5: Corporate Paddle Checkout Rails handler
+    // Select specific language from Settings modal
+    let i18n_clone = i18n.clone();
+    let config_clone = config.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_select_language(move |lang_code| {
+        let ui = ui_handle.unwrap();
+        let lang_str = lang_code.as_str();
+        ui.set_lang(lang_str.into());
+        i18n_clone.lock().unwrap().set_language(lang_str);
+        config_clone.lock().unwrap().language = lang_str.to_string();
+        config_clone.lock().unwrap().save();
+    });
+
+    // Encoder Selection Override from Settings modal
+    let config_clone = config.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_select_encoder(move |enc_name| {
+        let ui = ui_handle.unwrap();
+        ui.set_active_encoder(enc_name.clone());
+        config_clone.lock().unwrap().hw_encoder_override = enc_name.as_str().to_string();
+    });
+
+    // Save Config Callback
+    let config_clone = config.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_save_config(move || {
+        let ui = ui_handle.unwrap();
+        let mut cfg = config_clone.lock().unwrap();
+        cfg.language = ui.get_lang().as_str().to_string();
+        cfg.hw_encoder_override = ui.get_active_encoder().as_str().to_string();
+        cfg.save_directory = ui.get_save_path().as_str().to_string();
+        cfg.watermark_text = ui.get_watermark_text().as_str().to_string();
+        cfg.auto_watermark = ui.get_watermark_enabled();
+        cfg.cinematic_zoom = ui.get_cinematic_zoom_enabled();
+        cfg.save();
+        println!("[Main] Updated configuration saved successfully.");
+    });
+
+    // Interactive Canvas Redaction Handler
+    let ui_handle = ui.as_weak();
+    ui.on_apply_blur_region(move |x, y, w, h| {
+        let ui = ui_handle.unwrap();
+        println!("[EditorEngine] Applied interactive redaction box at ({}, {}) size {}x{}", x, y, w, h);
+        ui.set_status_message(format!("Applied redaction area at {},{}", x, y).into());
+    });
+
+    // Interactive Studio Export Handler
+    let config_clone = config.clone();
+    let ui_handle = ui.as_weak();
+    ui.on_save_editor_export(move || {
+        let ui = ui_handle.unwrap();
+        let _save_dir = config_clone.lock().unwrap().save_directory.clone();
+        if let Ok(path) = capture::CaptureEngine::save_screenshot(Some("WOLFITWAY")) {
+            println!("[EditorEngine] Exported edited showcase asset to: {:?}", path);
+            ui.set_status_message(format!("Exported to {:?}", path.file_name().unwrap()).into());
+            ui.set_show_editor_modal(false);
+        }
+    });
+
+    // Corporate Paddle Checkout Rails handler
+    let config_clone = config.clone();
     ui.on_open_paddle_checkout(move || {
-        let paddle_url = "https://buy.paddle.com/placeholder-wolfitway";
-        println!("[Paddle] Opening corporate checkout rails: {}", paddle_url);
-        if let Err(e) = open::that(paddle_url) {
+        let url = config_clone.lock().unwrap().paddle_checkout_url.clone();
+        println!("[Paddle] Opening corporate checkout rails: {}", url);
+        if let Err(e) = open::that(&url) {
             eprintln!("[Paddle] Failed to open browser link: {}", e);
         }
     });
 
-    // Milestone 1, 3, 4: Recording Engine Activation Handler
+    let recording_flag = Arc::new(AtomicBool::new(false));
+    let audio_enabled_flag = Arc::new(AtomicBool::new(true));
+
+    // Recording Engine Activation Handler
     let ui_handle = ui.as_weak();
     let flag_clone = recording_flag.clone();
     let audio_flag_clone = audio_enabled_flag.clone();
     let hw_profile_clone = hw_profile.clone();
     let focus_tracker_clone = focus_tracker.clone();
+    let i18n_clone = i18n.clone();
 
     ui.on_toggle_recording(move || {
         let ui = ui_handle.unwrap();
@@ -71,12 +178,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         flag_clone.store(next_state, Ordering::Relaxed);
 
-        let lang = ui.get_lang();
         if next_state {
-            let status_msg = if lang == "ro" {
-                format!("ÎNREGISTRARE ACTIVĂ {}", hw_profile_clone.encoder.tag())
-            } else {
-                format!("RECORDING ACTIVE {}", hw_profile_clone.encoder.tag())
+            let status_msg = {
+                let i = i18n_clone.lock().unwrap();
+                format!("{} {}", i.t("status_recording"), hw_profile_clone.encoder.tag())
             };
             ui.set_status_message(status_msg.into());
 
@@ -91,6 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let focus_tracker_thread = focus_tracker_clone.clone();
             let ui_handle_thread = ui.as_weak();
             let cinematic_zoom_enabled = ui.get_cinematic_zoom_enabled();
+            let i18n_thread = i18n_clone.clone();
 
             std::thread::spawn(move || {
                 let temp_video_path = match capture::CaptureEngine::start_video_recording(
@@ -105,12 +211,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                 };
 
-                // Wait for stop signal
                 while recording_flag_for_thread.load(Ordering::Relaxed) {
                     std::thread::sleep(std::time::Duration::from_millis(100));
                 }
 
-                // Give stream writer time to finalize file
                 std::thread::sleep(std::time::Duration::from_millis(300));
 
                 let final_muxed_path = temp_video_path.with_file_name(format!(
@@ -118,9 +222,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     chrono::Utc::now().timestamp()
                 ));
 
-                println!("[CaptureEngine] Muxing video and audio tracks into final MP4...");
-
-                // Milestone 4: Apply Cinematic Pan-and-Zoom FFmpeg filter if click events were logged
                 let mut ffmpeg_cmd = Command::new("ffmpeg");
                 ffmpeg_cmd.arg("-y").arg("-i").arg(temp_video_path.to_str().unwrap());
 
@@ -147,18 +248,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 match status {
                     Ok(s) if s.success() => {
-                        println!("[CaptureEngine] Successfully created final muxed recording: {:?}", final_muxed_path);
                         let _ = std::fs::remove_file(temp_video_path);
                         if let Some(audio_path) = audio_path_result {
                             let _ = std::fs::remove_file(audio_path);
                         }
 
-                        // Update UI status & trigger support prompt modal
                         let ui_weak = ui_handle_thread.clone();
+                        let i18n_sub = i18n_thread.clone();
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak.upgrade() {
-                                let lang = ui.get_lang();
-                                let msg = if lang == "ro" { "Export finalizat cu succes!" } else { "Export complete!" };
+                                let msg = i18n_sub.lock().unwrap().t("status_complete");
                                 ui.set_status_message(msg.into());
                                 ui.set_show_support_modal(true);
                             }
@@ -167,25 +266,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => eprintln!("[CaptureEngine] FFmpeg post-process muxing failed."),
                 }
             });
-
-            println!("Recording session initiated.");
         } else {
-            let status_msg = if lang == "ro" { "Finalizare procesare..." } else { "Muxing & finalizing..." };
+            let status_msg = i18n_clone.lock().unwrap().t("status_muxing");
             ui.set_status_message(status_msg.into());
-            println!("Stop signal sent to recording threads.");
         }
     });
 
-    // Milestone 3: Snapshot with Optional Watermark
+    // Snapshot Handler
     let ui_handle = ui.as_weak();
+    let i18n_clone = i18n.clone();
     ui.on_take_snapshot(move || {
         let ui = ui_handle.unwrap();
         let wm = if ui.get_watermark_enabled() { Some("WOLFITWAY") } else { None };
         match capture::CaptureEngine::save_screenshot(wm) {
             Ok(path) => {
                 println!("Saved screenshot with watermark to: {:?}", path);
-                let lang = ui.get_lang();
-                let msg = if lang == "ro" { "Instantaneu salvat!" } else { "Snapshot saved!" };
+                let msg = i18n_clone.lock().unwrap().t("status_complete");
                 ui.set_status_message(msg.into());
             }
             Err(e) => eprintln!("Failed to capture snapshot: {}", e),

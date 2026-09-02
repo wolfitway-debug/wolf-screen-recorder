@@ -1,6 +1,9 @@
+import { SettingsModal } from "settings.slint";
+import { StudioEditor } from "editor.slint";
+
 export component AppWindow inherits Window {
-    width: 720px;
-    height: root.show-settings || root.show-support-modal ? 148px : 86px;
+    width: 740px;
+    height: root.show-settings-modal ? 440px : (root.show-editor-modal ? 480px : 86px);
     no-frame: true;
     background: transparent;
     always-on-top: true;
@@ -13,28 +16,40 @@ export component AppWindow inherits Window {
     in-out property <bool> webcam-enabled: false;
     
     // Hardware & Bilingual Localization State
-    in-out property <string> lang: "en"; // "en" or "ro"
+    in-out property <string> lang: "en"; // "en", "ro", "es", "de", "fr", "ja"
     in-out property <string> hw-encoder-tag: "[HW-AUTO]";
     in-out property <string> status-message: "Ready";
 
-    // Modal States
-    in-out property <bool> show-settings: false;
+    // Modal Display Controls
+    in-out property <bool> show-settings-modal: false;
+    in-out property <bool> show-editor-modal: false;
     in-out property <bool> show-support-modal: false;
+    
+    // Config Properties
+    in-out property <string> active-encoder: "Auto";
+    in-out property <string> save-path: "/home/user/Videos";
+    in-out property <string> watermark-text: "WOLFITWAY";
     in-out property <bool> watermark-enabled: true;
     in-out property <bool> cinematic-zoom-enabled: true;
 
     // Callbacks
     callback toggle-recording();
     callback take-snapshot();
+    callback open-studio-editor();
     callback select-mode(string);
     callback select-resolution(string);
     callback toggle-audio();
     callback toggle-webcam();
     callback toggle-language();
+    callback select-language(string);
+    callback select-encoder(string);
+    callback save-config();
+    callback apply-blur-region(int, int, int, int);
+    callback save-editor-export();
     callback open-paddle-checkout();
     callback move-window(length, length);
 
-    // Main Glass Container
+    // Main Glass Floating Toolbar Container
     Rectangle {
         width: 100%;
         height: 100%;
@@ -206,16 +221,16 @@ export component AppWindow inherits Window {
                     }
                 }
 
-                // Language Switcher (EN / RO)
+                // Language Switcher Toggle
                 Rectangle {
-                    width: 44px; height: 36px;
+                    width: 46px; height: 36px;
                     background: #141c2e;
                     border-radius: 10px;
                     border-width: 1.2px;
                     border-color: #3b82f6;
 
                     Text {
-                        text: root.lang == "ro" ? "RO" : "EN";
+                        text: root.lang == "ro" ? "RO" : (root.lang == "es" ? "ES" : (root.lang == "de" ? "DE" : (root.lang == "fr" ? "FR" : (root.lang == "ja" ? "JA" : "EN"))));
                         font-size: 11px; font-weight: 900;
                         color: #3b82f6;
                         x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
@@ -223,10 +238,27 @@ export component AppWindow inherits Window {
                     TouchArea { clicked => { root.toggle-language(); } }
                 }
 
-                // Settings Toggle
+                // Studio Canvas Editor Button
+                Rectangle {
+                    width: 44px; height: 36px;
+                    background: root.show-editor-modal ? #00ff66 : #141c2e;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: #23314d;
+
+                    Text {
+                        text: "EDIT";
+                        font-size: 9px; font-weight: 900;
+                        color: root.show-editor-modal ? #000000 : #00ff66;
+                        x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+                    }
+                    TouchArea { clicked => { root.show-editor-modal = !root.show-editor-modal; } }
+                }
+
+                // Settings Button (Opens Full Preferences Modal)
                 Rectangle {
                     width: 36px; height: 36px;
-                    background: root.show-settings ? #3b82f6 : #141c2e;
+                    background: root.show-settings-modal ? #3b82f6 : #141c2e;
                     border-radius: 10px;
                     border-width: 1px;
                     border-color: #23314d;
@@ -234,10 +266,10 @@ export component AppWindow inherits Window {
                     Text {
                         text: "SET";
                         font-size: 9px; font-weight: 800;
-                        color: root.show-settings ? #ffffff : #cbd5e1;
+                        color: root.show-settings-modal ? #ffffff : #cbd5e1;
                         x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
                     }
-                    TouchArea { clicked => { root.show-settings = !root.show-settings; } }
+                    TouchArea { clicked => { root.show-settings-modal = !root.show-settings-modal; } }
                 }
 
                 // Snapshot Button
@@ -257,7 +289,7 @@ export component AppWindow inherits Window {
                     TouchArea { clicked => { root.take-snapshot(); } }
                 }
 
-                // REC Button (God Tier glowing action pill)
+                // REC Button
                 rec_btn := Rectangle {
                     width: 110px; height: 36px;
                     background: root.is-recording ? #ff3b30 : (rec_touch.has-hover ? #00e65c : #00ff66);
@@ -277,9 +309,7 @@ export component AppWindow inherits Window {
                         }
 
                         Text {
-                            text: root.lang == "ro" ? 
-                                (root.is-recording ? "STOP" : "REC") : 
-                                (root.is-recording ? "STOP" : "REC");
+                            text: root.is-recording ? "STOP" : "REC";
                             font-size: 12px; font-weight: 900;
                             color: root.is-recording ? #ffffff : #000000;
                             vertical-alignment: center;
@@ -308,7 +338,7 @@ export component AppWindow inherits Window {
                     }
 
                     Text {
-                        text: (root.lang == "ro" ? "STARE: " : "STATUS: ") + root.status-message;
+                        text: "STATUS: " + root.status-message;
                         font-size: 10px;
                         font-weight: 700;
                         color: #94a3b8;
@@ -327,7 +357,7 @@ export component AppWindow inherits Window {
                         alignment: center;
 
                         Text {
-                            text: root.lang == "ro" ? "💖 SUSȚINE DEZVOLTATORUL" : "💖 SUPPORT THE DEV";
+                            text: "💖 SUPPORT THE DEV";
                             font-size: 9px; font-weight: 800; color: #ffffff;
                             vertical-alignment: center;
                         }
@@ -336,94 +366,27 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // Row 3: Settings Popover Drawer (when toggled)
-            if (root.show-settings) : Rectangle {
-                height: 48px;
-                background: #141c2e;
-                border-radius: 10px;
-                border-width: 1px;
-                border-color: #3b82f6;
+            // Modal Overlay 1: Full Settings Page
+            if (root.show-settings-modal) : SettingsModal {
+                active-lang: root.lang;
+                active-encoder: root.active-encoder;
+                save-path: root.save-path;
+                watermark-text: root.watermark-text;
+                auto-watermark: root.watermark-enabled;
+                cinematic-zoom: root.cinematic-zoom-enabled;
 
-                HorizontalLayout {
-                    padding: 8px; spacing: 12px; alignment: center;
-
-                    Text {
-                        text: root.lang == "ro" ? "FILIGRAN AUTOMAT:" : "AUTO WATERMARK:";
-                        font-size: 10px; font-weight: 800; color: #cbd5e1; vertical-alignment: center;
-                    }
-                    Rectangle {
-                        width: 44px; height: 24px;
-                        background: root.watermark-enabled ? #00ff66 : #334155;
-                        border-radius: 12px;
-                        Text { text: root.watermark-enabled ? "ON" : "OFF"; font-size: 9px; font-weight: 900; color: #000; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                        TouchArea { clicked => { root.watermark-enabled = !root.watermark-enabled; } }
-                    }
-
-                    Rectangle { width: 1px; height: 20px; background: #334155; }
-
-                    Text {
-                        text: root.lang == "ro" ? "FOCALIZARE ZOOM:" : "CINEMATIC FOCUS:";
-                        font-size: 10px; font-weight: 800; color: #cbd5e1; vertical-alignment: center;
-                    }
-                    Rectangle {
-                        width: 44px; height: 24px;
-                        background: root.cinematic-zoom-enabled ? #00ff66 : #334155;
-                        border-radius: 12px;
-                        Text { text: root.cinematic-zoom-enabled ? "ON" : "OFF"; font-size: 9px; font-weight: 900; color: #000; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                        TouchArea { clicked => { root.cinematic-zoom-enabled = !root.cinematic-zoom-enabled; } }
-                    }
-                }
+                close-settings => { root.show-settings-modal = false; }
+                select-language(l) => { root.select-language(l); }
+                select-encoder(e) => { root.select-encoder(e); }
+                save-settings => { root.save-config(); }
             }
 
-            // Row 4: Support Modal Drawer
-            if (root.show-support-modal) : Rectangle {
-                height: 48px;
-                background: #1e1b4b;
-                border-radius: 10px;
-                border-width: 1px;
-                border-color: #818cf8;
-
-                HorizontalLayout {
-                    padding: 8px; spacing: 10px; alignment: center;
-
-                    Text {
-                        text: root.lang == "ro" ? 
-                            "Licență Enterprise WOLFITWAYAGENCY SRL" : 
-                            "Enterprise Licensing WOLFITWAYAGENCY SRL";
-                        font-size: 10px; font-weight: 700; color: #e0e7ff; vertical-alignment: center;
-                    }
-
-                    Rectangle {
-                        height: 26px;
-                        background: #6366f1;
-                        border-radius: 6px;
-
-                        HorizontalLayout {
-                            padding-left: 10px; padding-right: 10px;
-                            alignment: center;
-
-                            Text {
-                                text: root.lang == "ro" ? "💳 Deschide Paddle Checkout" : "💳 Open Paddle Checkout";
-                                font-size: 10px; font-weight: 800; color: #ffffff;
-                                vertical-alignment: center;
-                            }
-                        }
-                        TouchArea { 
-                            clicked => { 
-                                root.open-paddle-checkout();
-                                root.show-support-modal = false;
-                            } 
-                        }
-                    }
-
-                    Rectangle {
-                        width: 22px; height: 22px;
-                        background: #312e81;
-                        border-radius: 11px;
-                        Text { text: "✕"; font-size: 10px; color: #ffffff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
-                        TouchArea { clicked => { root.show-support-modal = false; } }
-                    }
-                }
+            // Modal Overlay 2: Studio Showcase Editor Canvas
+            if (root.show-editor-modal) : StudioEditor {
+                watermark-active: root.watermark-enabled;
+                close-editor => { root.show-editor-modal = false; }
+                apply-blur-region(x, y, w, h) => { root.apply-blur-region(x, y, w, h); }
+                save-editor-snapshot => { root.save-editor-export(); }
             }
         }
     }

@@ -1,0 +1,248 @@
+export component SettingsModal inherits Rectangle {
+    width: 620px;
+    height: 380px;
+    background: #0f172a;
+    border-radius: 16px;
+    border-width: 1.5px;
+    border-color: #3b82f6;
+    drop-shadow-blur: 24px;
+    drop-shadow-color: #3b82f640;
+
+    in-out property <string> active-tab: "general";
+    in-out property <string> active-lang: "en";
+    in-out property <string> active-encoder: "Auto";
+    in-out property <string> save-path: "/home/user/Videos";
+    in-out property <string> watermark-text: "WOLFITWAY";
+    in-out property <bool> auto-watermark: true;
+    in-out property <bool> cinematic-zoom: true;
+
+    callback close-settings();
+    callback select-language(string);
+    callback select-encoder(string);
+    callback save-settings();
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // Header Title
+        HorizontalLayout {
+            alignment: space-between;
+
+            Text {
+                text: "⚙️ PREFERENCES & HARDWARE SETTINGS";
+                font-size: 13px; font-weight: 900; color: #38bdf8;
+                vertical-alignment: center;
+            }
+
+            Rectangle {
+                width: 28px; height: 28px;
+                background: #1e293b; border-radius: 14px;
+                Text { text: "✕"; font-size: 12px; color: #94a3b8; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                TouchArea { clicked => { root.close-settings(); } }
+            }
+        }
+
+        Rectangle { height: 1px; background: #334155; }
+
+        // Navigation Tabs Bar
+        HorizontalLayout {
+            spacing: 8px;
+
+            Rectangle {
+                height: 30px;
+                background: root.active-tab == "general" ? #3b82f6 : #1e293b;
+                border-radius: 8px;
+                HorizontalLayout {
+                    padding-left: 12px; padding-right: 12px; alignment: center;
+                    Text { text: "🌐 General & Lang"; font-size: 10px; font-weight: 800; color: #ffffff; vertical-alignment: center; }
+                }
+                TouchArea { clicked => { root.active-tab = "general"; } }
+            }
+
+            Rectangle {
+                height: 30px;
+                background: root.active-tab == "hardware" ? #3b82f6 : #1e293b;
+                border-radius: 8px;
+                HorizontalLayout {
+                    padding-left: 12px; padding-right: 12px; alignment: center;
+                    Text { text: "⚡ GPU & Encoding"; font-size: 10px; font-weight: 800; color: #ffffff; vertical-alignment: center; }
+                }
+                TouchArea { clicked => { root.active-tab = "hardware"; } }
+            }
+
+            Rectangle {
+                height: 30px;
+                background: root.active-tab == "storage" ? #3b82f6 : #1e293b;
+                border-radius: 8px;
+                HorizontalLayout {
+                    padding-left: 12px; padding-right: 12px; alignment: center;
+                    Text { text: "📁 Storage Paths"; font-size: 10px; font-weight: 800; color: #ffffff; vertical-alignment: center; }
+                }
+                TouchArea { clicked => { root.active-tab = "storage"; } }
+            }
+        }
+
+        // Tab Content Area
+        Rectangle {
+            background: #1e293b;
+            border-radius: 12px;
+
+            VerticalLayout {
+                padding: 14px;
+                spacing: 10px;
+
+                // General Tab
+                if (root.active-tab == "general") : VerticalLayout {
+                    spacing: 10px;
+
+                    Text { text: "Language Selection:"; font-size: 11px; font-weight: 700; color: #94a3b8; }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+
+                        Rectangle {
+                            width: 50px; height: 32px;
+                            background: root.active-lang == "en" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "🇬🇧 EN"; font-size: 10px; font-weight: 800; color: root.active-lang == "en" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-language("en"); } }
+                        }
+
+                        Rectangle {
+                            width: 50px; height: 32px;
+                            background: root.active-lang == "ro" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "🇷🇴 RO"; font-size: 10px; font-weight: 800; color: root.active-lang == "ro" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-language("ro"); } }
+                        }
+
+                        Rectangle {
+                            width: 50px; height: 32px;
+                            background: root.active-lang == "es" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "🇪🇸 ES"; font-size: 10px; font-weight: 800; color: root.active-lang == "es" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-language("es"); } }
+                        }
+
+                        Rectangle {
+                            width: 50px; height: 32px;
+                            background: root.active-lang == "de" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "🇩🇪 DE"; font-size: 10px; font-weight: 800; color: root.active-lang == "de" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-language("de"); } }
+                        }
+
+                        Rectangle {
+                            width: 50px; height: 32px;
+                            background: root.active-lang == "fr" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "🇫🇷 FR"; font-size: 10px; font-weight: 800; color: root.active-lang == "fr" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-language("fr"); } }
+                        }
+
+                        Rectangle {
+                            width: 50px; height: 32px;
+                            background: root.active-lang == "ja" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "🇯🇵 JA"; font-size: 10px; font-weight: 800; color: root.active-lang == "ja" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-language("ja"); } }
+                        }
+                    }
+
+                    Rectangle { height: 1px; background: #334155; }
+
+                    HorizontalLayout {
+                        alignment: space-between;
+
+                        Text { text: "Default Brand Watermark:"; font-size: 11px; font-weight: 700; color: #94a3b8; vertical-alignment: center; }
+
+                        Rectangle {
+                            width: 52px; height: 26px;
+                            background: root.auto-watermark ? #00ff66 : #334155; border-radius: 13px;
+                            Text { text: root.auto-watermark ? "ON" : "OFF"; font-size: 9px; font-weight: 900; color: #000; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.auto-watermark = !root.auto-watermark; } }
+                        }
+                    }
+                }
+
+                // Hardware Tab
+                if (root.active-tab == "hardware") : VerticalLayout {
+                    spacing: 10px;
+
+                    Text { text: "Hardware Video Encoder Override:"; font-size: 11px; font-weight: 700; color: #94a3b8; }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+
+                        Rectangle {
+                            width: 70px; height: 32px;
+                            background: root.active-encoder == "Auto" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "⚡ AUTO"; font-size: 9px; font-weight: 800; color: root.active-encoder == "Auto" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-encoder("Auto"); } }
+                        }
+
+                        Rectangle {
+                            width: 70px; height: 32px;
+                            background: root.active-encoder == "NVENC" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "NVENC"; font-size: 9px; font-weight: 800; color: root.active-encoder == "NVENC" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-encoder("NVENC"); } }
+                        }
+
+                        Rectangle {
+                            width: 70px; height: 32px;
+                            background: root.active-encoder == "VA-API" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "VA-API"; font-size: 9px; font-weight: 800; color: root.active-encoder == "VA-API" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-encoder("VA-API"); } }
+                        }
+
+                        Rectangle {
+                            width: 70px; height: 32px;
+                            background: root.active-encoder == "QSV" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "QSV"; font-size: 9px; font-weight: 800; color: root.active-encoder == "QSV" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-encoder("QSV"); } }
+                        }
+
+                        Rectangle {
+                            width: 80px; height: 32px;
+                            background: root.active-encoder == "Software" ? #00ff66 : #0f172a; border-radius: 6px;
+                            Text { text: "SOFTWARE"; font-size: 9px; font-weight: 800; color: root.active-encoder == "Software" ? #000 : #fff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                            TouchArea { clicked => { root.select-encoder("Software"); } }
+                        }
+                    }
+                }
+
+                // Storage Tab
+                if (root.active-tab == "storage") : VerticalLayout {
+                    spacing: 10px;
+
+                    Text { text: "Recording Export Path:"; font-size: 11px; font-weight: 700; color: #94a3b8; }
+
+                    Rectangle {
+                        height: 36px; background: #0f172a; border-radius: 6px;
+                        HorizontalLayout {
+                            padding-left: 10px; padding-right: 10px; alignment: center;
+                            Text { text: root.save-path; font-size: 10px; color: #38bdf8; vertical-alignment: center; }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Footer Actions
+        HorizontalLayout {
+            alignment: space-between;
+
+            Text {
+                text: "Config stored at ~/.config/wolf-screen-recorder/config.json";
+                font-size: 9px; color: #64748b; vertical-alignment: center;
+            }
+
+            Rectangle {
+                width: 140px; height: 34px;
+                background: #00ff66; border-radius: 8px;
+                Text { text: "💾 SAVE & APPLY"; font-size: 11px; font-weight: 900; color: #000000; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                TouchArea {
+                    clicked => {
+                        root.save-settings();
+                        root.close-settings();
+                    }
+                }
+            }
+        }
+    }
+}

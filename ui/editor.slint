@@ -1,0 +1,187 @@
+export component StudioEditor inherits Rectangle {
+    width: 680px;
+    height: 420px;
+    background: #0b0f19;
+    border-radius: 18px;
+    border-width: 1.5px;
+    border-color: #00ff66;
+    drop-shadow-blur: 30px;
+    drop-shadow-color: #00ff6640;
+
+    in-out property <string> active-tool: "arrow";
+    in-out property <string> preview-path: "";
+    in-out property <bool> watermark-active: true;
+    in-out property <string> status-text: "Studio Editor Ready";
+
+    callback close-editor();
+    callback select-tool(string);
+    callback apply-blur-region(int, int, int, int);
+    callback save-editor-snapshot();
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 10px;
+
+        // Header Bar
+        HorizontalLayout {
+            alignment: space-between;
+
+            HorizontalLayout {
+                spacing: 8px;
+                alignment: center;
+
+                Text { text: "🎨 SHOWCASE STUDIO EDITOR"; font-size: 13px; font-weight: 900; color: #00ff66; vertical-alignment: center; }
+
+                Rectangle {
+                    height: 20px; background: #141c2e; border-radius: 5px;
+                    HorizontalLayout {
+                        padding-left: 6px; padding-right: 6px; alignment: center;
+                        Text { text: "PREVIEW & ANNOTATE"; font-size: 9px; font-weight: 800; color: #38bdf8; vertical-alignment: center; }
+                    }
+                }
+            }
+
+            Rectangle {
+                width: 28px; height: 28px; background: #141c2e; border-radius: 14px;
+                Text { text: "✕"; font-size: 12px; color: #ffffff; x: (parent.width - self.width)/2; y: (parent.height - self.height)/2; }
+                TouchArea { clicked => { root.close-editor(); } }
+            }
+        }
+
+        // Tools Toolbar Strip
+        Rectangle {
+            height: 42px;
+            background: #141c2e;
+            border-radius: 10px;
+            border-width: 1px;
+            border-color: #23314d;
+
+            HorizontalLayout {
+                padding: 4px; spacing: 6px; alignment: center;
+
+                // Tool: Arrow
+                Rectangle {
+                    height: 34px;
+                    background: root.active-tool == "arrow" ? #00ff66 : transparent; border-radius: 7px;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; alignment: center;
+                        Text { text: "🏹 ARROW"; font-size: 10px; font-weight: 800; color: root.active-tool == "arrow" ? #000 : #cbd5e1; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.select-tool("arrow"); } }
+                }
+
+                // Tool: Text
+                Rectangle {
+                    height: 34px;
+                    background: root.active-tool == "text" ? #00ff66 : transparent; border-radius: 7px;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; alignment: center;
+                        Text { text: "🔤 TEXT"; font-size: 10px; font-weight: 800; color: root.active-tool == "text" ? #000 : #cbd5e1; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.select-tool("text"); } }
+                }
+
+                // Tool: Blur / Redact
+                Rectangle {
+                    height: 34px;
+                    background: root.active-tool == "blur" ? #00ff66 : transparent; border-radius: 7px;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; alignment: center;
+                        Text { text: "💧 BLUR/REDACT"; font-size: 10px; font-weight: 800; color: root.active-tool == "blur" ? #000 : #cbd5e1; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.select-tool("blur"); } }
+                }
+
+                // Tool: Crop / Zoom
+                Rectangle {
+                    height: 34px;
+                    background: root.active-tool == "crop" ? #00ff66 : transparent; border-radius: 7px;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; alignment: center;
+                        Text { text: "🔍 CROP/ZOOM"; font-size: 10px; font-weight: 800; color: root.active-tool == "crop" ? #000 : #cbd5e1; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.select-tool("crop"); } }
+                }
+
+                Rectangle { width: 1px; height: 24px; background: #334155; }
+
+                // Watermark Toggle
+                Rectangle {
+                    height: 34px;
+                    background: root.watermark-active ? #3b82f6 : #0f172a; border-radius: 7px;
+                    HorizontalLayout {
+                        padding-left: 10px; padding-right: 10px; alignment: center;
+                        Text { text: root.watermark-active ? "🏷️ WATERMARK ON" : "🏷️ WATERMARK OFF"; font-size: 9px; font-weight: 800; color: #ffffff; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.watermark-active = !root.watermark-active; } }
+                }
+            }
+        }
+
+        // Interactive Canvas Preview Container
+        canvas_box := Rectangle {
+            background: #141c2e;
+            border-radius: 12px;
+            border-width: 1px;
+            border-color: #23314d;
+
+            Text {
+                text: "✨ Click & drag on canvas to apply " + root.active-tool + " annotation";
+                font-size: 12px; color: #64748b; font-weight: 700;
+                x: (parent.width - self.width)/2; y: (parent.height - self.height)/2;
+            }
+
+            // Canvas Click / Selection Box Interactive Handling
+            TouchArea {
+                property <int> drag-start-x;
+                property <int> drag-start-y;
+
+                pointer-event(event) => {
+                    if (event.button == PointerEventButton.left) {
+                        if (event.kind == PointerEventKind.down) {
+                            self.drag-start-x = self.mouse-x / 1px;
+                            self.drag-start-y = self.mouse-y / 1px;
+                        } else if (event.kind == PointerEventKind.up) {
+                            let end-x = self.mouse-x / 1px;
+                            let end-y = self.mouse-y / 1px;
+                            let w = end-x - self.drag-start-x;
+                            let h = end-y - self.drag-start-y;
+                            root.apply-blur-region(self.drag-start-x, self.drag-start-y, w, h);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Footer Actions
+        HorizontalLayout {
+            alignment: space-between;
+
+            Text { text: root.status-text; font-size: 10px; color: #94a3b8; vertical-alignment: center; }
+
+            HorizontalLayout {
+                spacing: 8px;
+
+                Rectangle {
+                    height: 34px;
+                    background: #141c2e; border-radius: 8px; border-width: 1px; border-color: #334155;
+                    HorizontalLayout {
+                        padding-left: 14px; padding-right: 14px; alignment: center;
+                        Text { text: "CANCEL"; font-size: 10px; font-weight: 800; color: #94a3b8; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.close-editor(); } }
+                }
+
+                Rectangle {
+                    height: 34px;
+                    background: #00ff66; border-radius: 8px;
+                    HorizontalLayout {
+                        padding-left: 16px; padding-right: 16px; alignment: center;
+                        Text { text: "💾 SAVE & EXPORT"; font-size: 11px; font-weight: 900; color: #000000; vertical-alignment: center; }
+                    }
+                    TouchArea { clicked => { root.save-editor-snapshot(); } }
+                }
+            }
+        }
+    }
+}
