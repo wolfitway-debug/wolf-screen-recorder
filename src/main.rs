@@ -637,11 +637,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let mut ffmpeg_cmd = Command::new("ffmpeg");
-                ffmpeg_cmd.arg("-y").arg("-i").arg(temp_video_path.to_str().unwrap()); // Input 0: Video
+                ffmpeg_cmd.arg("-y").arg("-thread_queue_size").arg("512").arg("-fflags").arg("+genpts").arg("-i").arg(temp_video_path.to_str().unwrap()); // Input 0: Video
 
                 let mut next_input_idx = 1;
                 let mic_idx = if let Some(mic_path) = &mic_audio_result {
-                    ffmpeg_cmd.arg("-i").arg(mic_path.to_str().unwrap());
+                    ffmpeg_cmd.arg("-thread_queue_size").arg("512").arg("-async").arg("1").arg("-i").arg(mic_path.to_str().unwrap());
                     let idx = next_input_idx;
                     next_input_idx += 1;
                     Some(idx)
@@ -650,7 +650,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let sys_idx = if let Some(sys_path) = &sys_audio_result {
-                    ffmpeg_cmd.arg("-i").arg(sys_path.to_str().unwrap());
+                    ffmpeg_cmd.arg("-thread_queue_size").arg("512").arg("-async").arg("1").arg("-i").arg(sys_path.to_str().unwrap());
                     let idx = next_input_idx;
                     next_input_idx += 1;
                     Some(idx)
@@ -663,7 +663,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if wm_enabled {
                     if let Some(logo_p) = &logo_path_opt {
                         if std::path::Path::new(logo_p).exists() {
-                            ffmpeg_cmd.arg("-i").arg(logo_p);
+                            ffmpeg_cmd.arg("-thread_queue_size").arg("512").arg("-loop").arg("1").arg("-framerate").arg("30").arg("-i").arg(logo_p);
                             logo_idx = Some(next_input_idx);
                             custom_logo_applied = true;
                         }
@@ -691,64 +691,69 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     video_filters.push(drawtext_vf);
                 }
 
-                // Complex filtering for logo overlay and/or dual-audio mixing
-                if custom_logo_applied || (mic_idx.is_some() && sys_idx.is_some()) {
-                    let mut fc = String::new();
-                    let overlay_pos = match pos_opt.as_str() {
-                        "BottomLeft" => "overlay=20:main_h-overlay_h-20",
-                        "TopRight" => "overlay=main_w-overlay_w-20:20",
-                        "TopLeft" => "overlay=20:20",
-                        _ => "overlay=main_w-overlay_w-20:main_h-overlay_h-20",
-                    };
+                video_filters.push("fps=fps=30".to_string());
 
-                    let v_in = if !video_filters.is_empty() {
-                        ffmpeg_cmd.arg("-vf").arg(video_filters.join(","));
-                        "0:v"
+                let mut filter_parts: Vec<String> = Vec::new();
+
+                // 1. Video Preprocessing Chain
+                let v_proc_label = if !video_filters.is_empty() {
+                    filter_parts.push(format!("[0:v]{}[vproc]", video_filters.join(",")));
+                    "[vproc]"
+                } else {
+                    "[0:v]"
+                };
+
+                // 2. Custom Watermark Logo Overlay
+                let final_v_label = if custom_logo_applied {
+                    if let Some(l_idx) = logo_idx {
+                        let overlay_pos = match pos_opt.as_str() {
+                            "BottomLeft" => "overlay=20:main_h-overlay_h-20:shortest=1",
+                            "TopRight" => "overlay=main_w-overlay_w-20:20:shortest=1",
+                            "TopLeft" => "overlay=20:20:shortest=1",
+                            _ => "overlay=main_w-overlay_w-20:main_h-overlay_h-20:shortest=1",
+                        };
+                        filter_parts.push(format!("[{}:v]scale=140:-1[logo]", l_idx));
+                        filter_parts.push(format!("{}[logo]{}[vout]", v_proc_label, overlay_pos));
+                        "[vout]"
                     } else {
-                        "0:v"
-                    };
-
-                    if custom_logo_applied {
-                        if let Some(l_idx) = logo_idx {
-                            fc.push_str(&format!("[{}:v]scale=140:-1[logo];[{}][logo]{}[vout];", l_idx, v_in, overlay_pos));
-                            ffmpeg_cmd.arg("-map").arg("[vout]");
-                        } else {
-                            ffmpeg_cmd.arg("-map").arg("0:v:0");
-                        }
-                    } else {
-                        ffmpeg_cmd.arg("-map").arg("0:v:0");
-                    }
-
-                    if let (Some(m_idx), Some(s_idx)) = (mic_idx, sys_idx) {
-                        fc.push_str(&format!("[{}:a][{}:a]amix=inputs=2:duration=first:dropout_transition=2[aout]", m_idx, s_idx));
-                        ffmpeg_cmd.arg("-map").arg("[aout]");
-                    } else if let Some(m_idx) = mic_idx {
-                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", m_idx));
-                    } else if let Some(s_idx) = sys_idx {
-                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", s_idx));
-                    }
-
-                    if !fc.is_empty() {
-                        ffmpeg_cmd.arg("-filter_complex").arg(fc);
+                        v_proc_label
                     }
                 } else {
-                    if !video_filters.is_empty() {
-                        ffmpeg_cmd.arg("-vf").arg(video_filters.join(","));
-                    }
-                    ffmpeg_cmd.arg("-map").arg("0:v:0");
+                    v_proc_label
+                };
 
-                    if let Some(m_idx) = mic_idx {
-                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", m_idx));
-                    } else if let Some(s_idx) = sys_idx {
-                        ffmpeg_cmd.arg("-map").arg(format!("{}:a:0", s_idx));
-                    }
+                // 3. Audio Stream Handling
+                let final_a_label = if let (Some(m_idx), Some(s_idx)) = (mic_idx, sys_idx) {
+                    filter_parts.push(format!("[{}:a][{}:a]amix=inputs=2:duration=first:dropout_transition=2[aout]", m_idx, s_idx));
+                    Some("[aout]".to_string())
+                } else if let Some(m_idx) = mic_idx {
+                    Some(format!("{}:a:0", m_idx))
+                } else if let Some(s_idx) = sys_idx {
+                    Some(format!("{}:a:0", s_idx))
+                } else {
+                    None
+                };
+
+                // 4. Assemble and Apply Filter Complex
+                if !filter_parts.is_empty() {
+                    let fc_string = filter_parts.join(";");
+                    ffmpeg_cmd.arg("-filter_complex").arg(fc_string);
+                }
+
+                if final_v_label != "[0:v]" {
+                    ffmpeg_cmd.arg("-map").arg(final_v_label);
+                } else {
+                    ffmpeg_cmd.arg("-map").arg("0:v:0");
+                }
+
+                if let Some(ref a_lbl) = final_a_label {
+                    ffmpeg_cmd.arg("-map").arg(a_lbl);
                 }
 
                 let has_audio = mic_idx.is_some() || sys_idx.is_some();
                 if has_audio {
                     ffmpeg_cmd.args(&[
-                        "-r", "30",
-                        "-fps_mode", "passthrough",
+                        "-fps_mode", "cfr",
                         "-c:v", "libx264",
                         "-preset", "fast",
                         "-c:a", "aac",
@@ -758,8 +763,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ]);
                 } else {
                     ffmpeg_cmd.args(&[
-                        "-r", "30",
-                        "-fps_mode", "passthrough",
+                        "-fps_mode", "cfr",
                         "-c:v", "libx264",
                         "-preset", "fast",
                         final_muxed_path.to_str().unwrap(),

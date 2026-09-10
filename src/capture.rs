@@ -84,6 +84,8 @@ impl CaptureEngine {
             // Construct FFmpeg command with Hardware Auto-Detection args
             let mut ffmpeg_args = vec![
                 "-y".to_string(),
+                "-thread_queue_size".to_string(), "512".to_string(),
+                "-fflags".to_string(), "+genpts".to_string(),
                 "-f".to_string(), "rawvideo".to_string(),
                 "-vcodec".to_string(), "rawvideo".to_string(),
                 "-s".to_string(), format!("{}x{}", width, height),
@@ -94,6 +96,8 @@ impl CaptureEngine {
 
             // Add profile-specific encoder & acceleration flags
             ffmpeg_args.extend(hw_profile.get_ffmpeg_args());
+            ffmpeg_args.push("-fps_mode".to_string());
+            ffmpeg_args.push("cfr".to_string());
             ffmpeg_args.push("-pix_fmt".to_string());
             ffmpeg_args.push("yuv420p".to_string());
             ffmpeg_args.push(temp_video_clone.to_str().unwrap().to_string());
@@ -112,9 +116,11 @@ impl CaptureEngine {
                     // Fallback to libx264
                     Command::new("ffmpeg")
                         .args(&[
-                            "-y", "-f", "rawvideo", "-vcodec", "rawvideo",
+                            "-y", "-thread_queue_size", "512", "-fflags", "+genpts",
+                            "-f", "rawvideo", "-vcodec", "rawvideo",
                             "-s", &format!("{}x{}", width, height),
                             "-pix_fmt", "rgba", "-r", "30", "-i", "-",
+                            "-fps_mode", "cfr",
                             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                             "-pix_fmt", "yuv420p", temp_video_clone.to_str().unwrap()
                         ])

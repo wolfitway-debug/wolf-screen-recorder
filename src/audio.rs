@@ -145,13 +145,14 @@ impl AudioEngine {
             };
 
             let mut ffmpeg_cmd = std::process::Command::new("ffmpeg");
-            ffmpeg_cmd.arg("-y");
+            ffmpeg_cmd.arg("-y").arg("-fflags").arg("+genpts");
             for arg in pulse_arg {
                 ffmpeg_cmd.arg(arg);
             }
             ffmpeg_cmd.args(&[
                 "-ac", "2",
                 "-ar", "44100",
+                "-async", "1",
                 wav_path_clone.to_str().unwrap(),
             ]);
 
