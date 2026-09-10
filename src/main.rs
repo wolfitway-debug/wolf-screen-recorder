@@ -747,6 +747,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let has_audio = mic_idx.is_some() || sys_idx.is_some();
                 if has_audio {
                     ffmpeg_cmd.args(&[
+                        "-r", "30",
+                        "-fps_mode", "passthrough",
                         "-c:v", "libx264",
                         "-preset", "fast",
                         "-c:a", "aac",
@@ -756,6 +758,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ]);
                 } else {
                     ffmpeg_cmd.args(&[
+                        "-r", "30",
+                        "-fps_mode", "passthrough",
                         "-c:v", "libx264",
                         "-preset", "fast",
                         final_muxed_path.to_str().unwrap(),

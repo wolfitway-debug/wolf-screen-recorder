@@ -78,16 +78,8 @@ impl CaptureEngine {
                 }
             };
 
-            let initial_image = match monitor.capture_image() {
-                Ok(img) => img,
-                Err(e) => {
-                    eprintln!("Failed to capture initial frame: {}", e);
-                    return;
-                }
-            };
-
-            let width = initial_image.width();
-            let height = initial_image.height();
+            let width = monitor.width();
+            let height = monitor.height();
 
             // Construct FFmpeg command with Hardware Auto-Detection args
             let mut ffmpeg_args = vec![
@@ -141,28 +133,25 @@ impl CaptureEngine {
                 }
             };
 
-            let mut frame_count = 0;
-            while is_recording_flag.load(Ordering::Relaxed) {
-                let start_time = std::time::Instant::now();
-                
-                let image_result = if frame_count == 0 {
-                    Ok(initial_image.clone())
-                } else {
-                    monitor.capture_image()
-                };
+            let frame_duration = Duration::from_nanos(1_000_000_000 / 30);
+            let recording_start = std::time::Instant::now();
+            let mut frame_count: u64 = 0;
 
-                if let Ok(image) = image_result {
+            while is_recording_flag.load(Ordering::Relaxed) {
+                if let Ok(image) = monitor.capture_image() {
                     let rgba_data = image.as_raw();
                     if let Err(e) = stdin.write_all(rgba_data) {
                         eprintln!("Failed to write frame to ffmpeg stdin: {}", e);
                         break;
                     }
+                    let _ = stdin.flush();
                     frame_count += 1;
                 }
 
-                let elapsed = start_time.elapsed();
-                if elapsed < Duration::from_millis(33) {
-                    thread::sleep(Duration::from_millis(33) - elapsed);
+                let target_time = recording_start + frame_duration * (frame_count as u32);
+                let now = std::time::Instant::now();
+                if target_time > now {
+                    thread::sleep(target_time - now);
                 }
             }
 

@@ -75,7 +75,7 @@ impl FocusTracker {
         // Smooth zoompan filter string for high-end cinematic polish
         // Uses FFmpeg zoompan filter to smoothly zoom into clicked coordinates
         let filter = format!(
-            "zoompan=z='if(between(in,30,120),min(zoom+0.015,{}),max(zoom-0.015,1))':x='{}-iw/2/zoom':y='{}-ih/2/zoom':d=120:s={}x{}",
+            "zoompan=z='if(between(in,30,120),min(zoom+0.015,{}),max(zoom-0.015,1))':x='{}-iw/2/zoom':y='{}-ih/2/zoom':d=120:s={}x{}:fps=30",
             zoom_factor,
             target.x,
             target.y,
