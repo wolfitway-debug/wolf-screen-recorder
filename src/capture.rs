@@ -89,9 +89,12 @@ impl CaptureEngine {
             let display_env = std::env::var("DISPLAY").unwrap_or_else(|_| ":0.0".to_string());
             let use_x11grab = cfg!(target_os = "linux") && !display_env.is_empty();
 
+            let fps_str = hw_profile.monitor_refresh_rate.clamp(30, 60).to_string();
+
             let mut ffmpeg_args = vec![
                 "-y".to_string(),
-                "-thread_queue_size".to_string(), "512".to_string(),
+                "-thread_queue_size".to_string(), "2048".to_string(),
+                "-probesize".to_string(), "64M".to_string(),
                 "-fflags".to_string(), "+genpts".to_string(),
             ];
 
@@ -99,7 +102,7 @@ impl CaptureEngine {
                 ffmpeg_args.extend(vec![
                     "-f".to_string(), "x11grab".to_string(),
                     "-draw_mouse".to_string(), "1".to_string(),
-                    "-framerate".to_string(), "30".to_string(),
+                    "-framerate".to_string(), fps_str.clone(),
                     "-video_size".to_string(), format!("{}x{}", width, height),
                     "-i".to_string(), format!("{}+{},{}", display_env, offset_x, offset_y),
                 ]);
@@ -109,7 +112,7 @@ impl CaptureEngine {
                     "-vcodec".to_string(), "rawvideo".to_string(),
                     "-s".to_string(), format!("{}x{}", width, height),
                     "-pix_fmt".to_string(), "rgba".to_string(),
-                    "-r".to_string(), "30".to_string(),
+                    "-r".to_string(), fps_str.clone(),
                     "-i".to_string(), "-".to_string(),
                 ]);
             }
@@ -122,7 +125,7 @@ impl CaptureEngine {
             ffmpeg_args.push("yuv420p".to_string());
             ffmpeg_args.push(temp_video_clone.to_str().unwrap().to_string());
 
-            println!("[CaptureEngine] Spawning FFmpeg (x11grab: {}): {:?}", use_x11grab, ffmpeg_args);
+            println!("[CaptureEngine] Spawning FFmpeg (x11grab: {}, fps: {}): {:?}", use_x11grab, fps_str, ffmpeg_args);
 
             let mut ffmpeg_child = match Command::new("ffmpeg")
                 .args(&ffmpeg_args)
@@ -135,8 +138,8 @@ impl CaptureEngine {
                     eprintln!("Failed to spawn ffmpeg hardware encoder: {}. Retrying with software fallback libx264...", e);
                     Command::new("ffmpeg")
                         .args(&[
-                            "-y", "-thread_queue_size", "512", "-fflags", "+genpts",
-                            "-f", "x11grab", "-draw_mouse", "1", "-framerate", "30",
+                            "-y", "-thread_queue_size", "2048", "-probesize", "64M", "-fflags", "+genpts",
+                            "-f", "x11grab", "-draw_mouse", "1", "-framerate", &fps_str,
                             "-video_size", &format!("{}x{}", width, height),
                             "-i", &format!("{}+{},{}", display_env, offset_x, offset_y),
                             "-fps_mode", "cfr",

@@ -640,7 +640,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             std::thread::spawn(move || {
                 let temp_video_path = match capture::CaptureEngine::start_video_recording(
                     recording_flag_for_thread.clone(),
-                    hw_profile_thread,
+                    hw_profile_thread.clone(),
                     focus_tracker_thread.clone(),
                 ) {
                     Ok(path) => path,
@@ -732,7 +732,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let has_v_filters = !video_filters.is_empty() || custom_logo_applied;
                 if has_v_filters {
-                    video_filters.push("fps=fps=30".to_string());
+                    let fps_val = hw_profile_thread.monitor_refresh_rate.clamp(30, 60);
+                    video_filters.push(format!("fps=fps={}", fps_val));
                 }
 
                 let mut filter_parts: Vec<String> = Vec::new();
