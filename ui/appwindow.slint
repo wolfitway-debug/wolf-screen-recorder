@@ -5,7 +5,7 @@ export { RegionSelectorWindow } from "region_selector.slint";
 export { WebcamPipWindow } from "webcam_pip.slint";
 
 export component AppWindow inherits Window {
-    width: root.show-settings-modal ? 740px : (root.show-editor-modal ? 920px : (root.show-window-picker ? 640px : (root.show-video-saved-modal ? 560px : (root.is-recording ? 260px : 860px))));
+    width: root.show-settings-modal ? 740px : (root.show-editor-modal ? 920px : (root.show-window-picker ? 640px : (root.show-video-saved-modal ? 560px : (root.is-recording ? 270px : 860px))));
     height: root.show-settings-modal ? 460px : (root.show-editor-modal ? 620px : (root.show-window-picker ? 420px : (root.show-video-saved-modal ? 240px : 64px)));
     no-frame: true;
     background: transparent;
@@ -133,6 +133,8 @@ export component AppWindow inherits Window {
 
             // ── RECORDING HUD MODE (Active when recording) ─────────────────────
             if (root.is-recording) : HorizontalLayout {
+                height: 38px;
+                y: (parent.height - self.height)/2;
                 spacing: 14px;
                 alignment: center;
 

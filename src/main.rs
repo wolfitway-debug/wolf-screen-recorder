@@ -569,12 +569,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let start_time = std::time::Instant::now();
                 while timer_flag.load(Ordering::Relaxed) {
                     let elapsed_secs = start_time.elapsed().as_secs();
-                    let minutes = elapsed_secs / 60;
+                    let hours = elapsed_secs / 3600;
+                    let minutes = (elapsed_secs % 3600) / 60;
                     let seconds = elapsed_secs % 60;
-                    let timer_str = if minutes >= 60 {
-                        let hours = minutes / 60;
-                        let mins = minutes % 60;
-                        format!("{:02}:{:02}:{:02}", hours, mins, seconds)
+                    let timer_str = if hours > 0 {
+                        format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
                     } else {
                         format!("{:02}:{:02}", minutes, seconds)
                     };
