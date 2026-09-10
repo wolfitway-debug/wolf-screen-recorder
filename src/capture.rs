@@ -127,7 +127,7 @@ impl CaptureEngine {
             let mut ffmpeg_child = match Command::new("ffmpeg")
                 .args(&ffmpeg_args)
                 .stdin(Stdio::piped())
-                .stderr(Stdio::piped())
+                .stderr(Stdio::null())
                 .spawn()
             {
                 Ok(child) => child,
@@ -144,7 +144,7 @@ impl CaptureEngine {
                             "-pix_fmt", "yuv420p", temp_video_clone.to_str().unwrap()
                         ])
                         .stdin(Stdio::piped())
-                        .stderr(Stdio::piped())
+                        .stderr(Stdio::null())
                         .spawn()
                         .expect("Failed to spawn ffmpeg software fallback")
                 }
@@ -189,14 +189,13 @@ impl CaptureEngine {
 
             drop(stdin);
 
-            let output = ffmpeg_child.wait_with_output();
-            match output {
-                Ok(o) if o.status.success() => {
+            let status = ffmpeg_child.wait();
+            match status {
+                Ok(s) if s.success() => {
                     println!("[CaptureEngine] Video capture successfully encoded using {}: {:?}", hw_profile.encoder.display_name(), temp_video_clone);
                 }
-                Ok(o) => {
-                    let stderr = String::from_utf8_lossy(&o.stderr);
-                    eprintln!("[CaptureEngine] Hardware encoder output stderr:\n{}", stderr);
+                Ok(s) => {
+                    eprintln!("[CaptureEngine] Video encoder exited with status: {}", s);
                 }
                 Err(e) => eprintln!("Failed to wait for ffmpeg process: {}", e),
             }

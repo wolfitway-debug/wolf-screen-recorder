@@ -560,6 +560,36 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         flag_clone.store(next_state, Ordering::Relaxed);
 
         if next_state {
+            ui.set_recording_timer("00:00".into());
+
+            // Spawn live timer ticker thread
+            let timer_flag = flag_clone.clone();
+            let ui_handle_timer = ui.as_weak();
+            std::thread::spawn(move || {
+                let start_time = std::time::Instant::now();
+                while timer_flag.load(Ordering::Relaxed) {
+                    let elapsed_secs = start_time.elapsed().as_secs();
+                    let minutes = elapsed_secs / 60;
+                    let seconds = elapsed_secs % 60;
+                    let timer_str = if minutes >= 60 {
+                        let hours = minutes / 60;
+                        let mins = minutes % 60;
+                        format!("{:02}:{:02}:{:02}", hours, mins, seconds)
+                    } else {
+                        format!("{:02}:{:02}", minutes, seconds)
+                    };
+
+                    let ui_weak = ui_handle_timer.clone();
+                    let _ = slint::invoke_from_event_loop(move || {
+                        if let Some(ui) = ui_weak.upgrade() {
+                            ui.set_recording_timer(timer_str.into());
+                        }
+                    });
+
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                }
+            });
+
             let status_msg = {
                 let i = i18n_clone.lock().unwrap();
                 format!("{} {}", i.t("status_recording"), hw_profile_clone.encoder.tag())
@@ -789,11 +819,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                         let ui_weak = ui_handle_thread.clone();
                         let i18n_sub = i18n_thread.clone();
+                        let final_path_str = final_muxed_path.to_string_lossy().to_string();
                         let _ = slint::invoke_from_event_loop(move || {
                             if let Some(ui) = ui_weak.upgrade() {
                                 let msg = i18n_sub.lock().unwrap().t("status_complete");
                                 ui.set_status_message(msg.into());
-                                ui.set_show_support_modal(true);
+                                ui.set_saved_video_path(final_path_str.into());
+                                ui.set_show_video_saved_modal(true);
+                                ui.set_recording_timer("00:00".into());
                             }
                         });
                     }
@@ -803,6 +836,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } else {
             let status_msg = i18n_clone.lock().unwrap().t("status_muxing");
             ui.set_status_message(status_msg.into());
+        }
+    });
+
+    ui.on_open_video_folder(move |path_str| {
+        let path = std::path::Path::new(path_str.as_str());
+        let target_dir = if path.is_file() {
+            path.parent().unwrap_or(path)
+        } else {
+            path
+        };
+        if let Err(e) = open::that(target_dir) {
+            eprintln!("[Main] Failed to open video folder: {}", e);
         }
     });
 

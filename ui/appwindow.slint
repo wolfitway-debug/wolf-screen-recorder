@@ -5,8 +5,8 @@ export { RegionSelectorWindow } from "region_selector.slint";
 export { WebcamPipWindow } from "webcam_pip.slint";
 
 export component AppWindow inherits Window {
-    width: root.show-settings-modal ? 740px : (root.show-editor-modal ? 920px : (root.show-window-picker ? 640px : 860px));
-    height: root.show-settings-modal ? 460px : (root.show-editor-modal ? 620px : (root.show-window-picker ? 420px : 64px));
+    width: root.show-settings-modal ? 740px : (root.show-editor-modal ? 920px : (root.show-window-picker ? 640px : (root.show-video-saved-modal ? 560px : (root.is-recording ? 260px : 860px))));
+    height: root.show-settings-modal ? 460px : (root.show-editor-modal ? 620px : (root.show-window-picker ? 420px : (root.show-video-saved-modal ? 240px : 64px)));
     no-frame: true;
     background: transparent;
     always-on-top: true;
@@ -18,6 +18,11 @@ export component AppWindow inherits Window {
     in-out property <string> resolution: "1080p";
     in-out property <bool> audio-enabled: false;
     in-out property <bool> webcam-enabled: false;
+
+    // Recording HUD & Video Saved Popup Properties
+    in-out property <string> recording-timer: "00:00";
+    in-out property <bool> show-video-saved-modal: false;
+    in-out property <string> saved-video-path: "";
 
     // State
     in-out property <string> lang: "en";
@@ -86,6 +91,7 @@ export component AppWindow inherits Window {
     callback apply-annotation(string, string, int, int, int, int, int, string);
     callback save-editor-export();
     callback open-paddle-checkout();
+    callback open-video-folder(string);
     callback move-window(length, length);
 
     // ── ROOT CARD ─────────────────────────────────────────────────────────────
@@ -93,7 +99,7 @@ export component AppWindow inherits Window {
         width: 100%;
         height: 100%;
         background: #080c14;
-        border-radius: root.show-settings-modal || root.show-editor-modal || root.show-window-picker ? 20px : 16px;
+        border-radius: root.show-settings-modal || root.show-editor-modal || root.show-window-picker || root.show-video-saved-modal ? 20px : 16px;
         border-width: 1.5px;
         border-color: root.is-recording ? #ef444470 : #22d45e40;
         drop-shadow-blur: 28px;
@@ -117,13 +123,73 @@ export component AppWindow inherits Window {
         }
 
         // ── VIEW 1: MINIMAL SINGLE-ROW TOOLBAR ────────────────────────────────
-        if (!root.show-settings-modal && !root.show-editor-modal && !root.show-window-picker) : HorizontalLayout {
+        if (!root.show-settings-modal && !root.show-editor-modal && !root.show-window-picker && !root.show-video-saved-modal) : HorizontalLayout {
             width: 100%;
             height: 100%;
             padding-left: 16px;
             padding-right: 16px;
             spacing: 12px;
             alignment: center;
+
+            // ── RECORDING HUD MODE (Active when recording) ─────────────────────
+            if (root.is-recording) : HorizontalLayout {
+                spacing: 14px;
+                alignment: center;
+
+                Rectangle {
+                    height: 38px;
+                    background: #0f1623;
+                    border-radius: 10px;
+                    border-width: 1.5px;
+                    border-color: #ef444470;
+
+                    HorizontalLayout {
+                        padding-left: 14px; padding-right: 14px; spacing: 8px; alignment: center;
+                        Rectangle {
+                            width: 10px; height: 10px;
+                            background: #ef4444; border-radius: 5px;
+                            y: (parent.height - self.height)/2;
+                        }
+                        Text {
+                            text: "REC";
+                            font-size: 11px; font-weight: 900; color: #ef4444;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: root.recording-timer;
+                            font-size: 15px; font-weight: 900; color: #ffffff;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+
+                Rectangle {
+                    height: 38px;
+                    background: rec_stop_t.has-hover ? #dc2626 : #ef4444;
+                    border-radius: 10px;
+                    animate background { duration: 100ms; }
+
+                    HorizontalLayout {
+                        padding-left: 16px; padding-right: 16px; spacing: 6px; alignment: center;
+                        Rectangle {
+                            width: 10px; height: 10px;
+                            background: #ffffff; border-radius: 2px;
+                            y: (parent.height - self.height)/2;
+                        }
+                        Text {
+                            text: "STOP";
+                            font-size: 11px; font-weight: 900; color: #ffffff;
+                            vertical-alignment: center;
+                        }
+                    }
+                    rec_stop_t := TouchArea { clicked => { root.toggle-recording(); } }
+                }
+            }
+
+            // ── STANDARD TOOLBAR MODE (Active when idle) ─────────────────────
+            if (!root.is-recording) : HorizontalLayout {
+                spacing: 12px;
+                alignment: center;
 
             // ── LEFT: Brand Icon + Mode Toggle Pill ─────────────────────────
             HorizontalLayout {
@@ -452,6 +518,7 @@ export component AppWindow inherits Window {
                 }
             }
         }
+    }
 
         // ── VIEW 2: SETTINGS PANEL ────────────────────────────────────────────
         if (root.show-settings-modal) : SettingsModal {
@@ -500,6 +567,139 @@ export component AppWindow inherits Window {
             close-window-picker => { root.show-window-picker = false; }
             select-target-window(x, y, w, h, title) => {
                 root.select-target-window(x, y, w, h, title);
+            }
+        }
+
+        // ── VIEW 5: VIDEO SAVED POPUP MODAL ───────────────────────────────────
+        if (root.show-video-saved-modal) : Rectangle {
+            width: 100%;
+            height: 100%;
+            background: #080c14;
+            border-radius: 20px;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: start;
+
+                    Rectangle {
+                        width: 42px; height: 42px;
+                        background: #0f291e;
+                        border-radius: 12px;
+                        border-width: 1.5px;
+                        border-color: #22d45e60;
+
+                        Text {
+                            text: "🎬";
+                            font-size: 20px;
+                            x: (parent.width - self.width)/2;
+                            y: (parent.height - self.height)/2;
+                        }
+                    }
+
+                    VerticalLayout {
+                        spacing: 3px;
+                        alignment: center;
+
+                        Text {
+                            text: "Video Saved Successfully!";
+                            font-size: 15px;
+                            font-weight: 900;
+                            color: #22d45e;
+                        }
+
+                        Text {
+                            text: "Recording encoded and saved to disk.";
+                            font-size: 11px;
+                            color: #94a3b8;
+                        }
+                    }
+                }
+
+                // File path badge
+                Rectangle {
+                    height: 38px;
+                    background: #0f1623;
+                    border-radius: 8px;
+                    border-width: 1px;
+                    border-color: #334155;
+
+                    HorizontalLayout {
+                        padding-left: 12px; padding-right: 12px;
+                        alignment: start;
+
+                        Text {
+                            text: "📍 " + root.saved-video-path;
+                            font-size: 11px;
+                            font-weight: 700;
+                            color: #38bdf8;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                    }
+                }
+
+                // Action Buttons
+                HorizontalLayout {
+                    spacing: 10px;
+                    alignment: end;
+
+                    Rectangle {
+                        height: 36px;
+                        background: btn_disc_t.has-hover ? #1e293b : #0f1623;
+                        border-radius: 8px;
+                        border-width: 1px;
+                        border-color: #334155;
+                        animate background { duration: 100ms; }
+
+                        HorizontalLayout {
+                            padding-left: 16px; padding-right: 16px;
+                            Text {
+                                text: "Dismiss";
+                                font-size: 11px;
+                                font-weight: 800;
+                                color: #94a3b8;
+                                vertical-alignment: center;
+                            }
+                        }
+                        btn_disc_t := TouchArea { clicked => { root.show-video-saved-modal = false; } }
+                    }
+
+                    Rectangle {
+                        height: 36px;
+                        background: btn_open_t.has-hover ? #16a34a : #22d45e;
+                        border-radius: 8px;
+                        animate background { duration: 100ms; }
+
+                        HorizontalLayout {
+                            padding-left: 16px; padding-right: 16px;
+                            spacing: 6px;
+
+                            Text {
+                                text: "📂";
+                                font-size: 12px;
+                                vertical-alignment: center;
+                            }
+
+                            Text {
+                                text: "Open Video Folder";
+                                font-size: 11px;
+                                font-weight: 900;
+                                color: #000000;
+                                vertical-alignment: center;
+                            }
+                        }
+                        btn_open_t := TouchArea {
+                            clicked => {
+                                root.open-video-folder(root.saved-video-path);
+                                root.show-video-saved-modal = false;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
