@@ -672,7 +672,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 };
 
                 let mut ffmpeg_cmd = Command::new("ffmpeg");
-                ffmpeg_cmd.arg("-y").arg("-thread_queue_size").arg("512").arg("-fflags").arg("+genpts").arg("-i").arg(temp_video_path.to_str().unwrap()); // Input 0: Video
+                ffmpeg_cmd.arg("-y")
+                    .arg("-loglevel").arg("error")
+                    .arg("-thread_queue_size").arg("512")
+                    .arg("-fflags").arg("+genpts")
+                    .arg("-i").arg(temp_video_path.to_str().unwrap()); // Input 0: Video
 
                 let mut next_input_idx = 1;
                 let mic_idx = if let Some(mic_path) = &mic_audio_result {
@@ -726,7 +730,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     video_filters.push(drawtext_vf);
                 }
 
-                video_filters.push("fps=fps=30".to_string());
+                let has_v_filters = !video_filters.is_empty() || custom_logo_applied;
+                if has_v_filters {
+                    video_filters.push("fps=fps=30".to_string());
+                }
 
                 let mut filter_parts: Vec<String> = Vec::new();
 
@@ -785,24 +792,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     ffmpeg_cmd.arg("-map").arg(a_lbl);
                 }
 
+                let v_codec = if has_v_filters { "libx264" } else { "copy" };
+                let preset_args = if has_v_filters { vec!["-preset", "ultrafast"] } else { vec![] };
+
                 let has_audio = mic_idx.is_some() || sys_idx.is_some();
                 if has_audio {
+                    ffmpeg_cmd.arg("-c:v").arg(v_codec);
+                    for pa in preset_args {
+                        ffmpeg_cmd.arg(pa);
+                    }
                     ffmpeg_cmd.args(&[
-                        "-fps_mode", "cfr",
-                        "-c:v", "libx264",
-                        "-preset", "fast",
                         "-c:a", "aac",
                         "-b:a", "192k",
                         "-shortest",
                         final_muxed_path.to_str().unwrap(),
                     ]);
                 } else {
-                    ffmpeg_cmd.args(&[
-                        "-fps_mode", "cfr",
-                        "-c:v", "libx264",
-                        "-preset", "fast",
-                        final_muxed_path.to_str().unwrap(),
-                    ]);
+                    ffmpeg_cmd.arg("-c:v").arg(v_codec);
+                    for pa in preset_args {
+                        ffmpeg_cmd.arg(pa);
+                    }
+                    ffmpeg_cmd.arg(final_muxed_path.to_str().unwrap());
                 }
 
                 let status = ffmpeg_cmd.status();

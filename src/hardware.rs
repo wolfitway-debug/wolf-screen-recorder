@@ -252,20 +252,20 @@ impl HardwareProfile {
     }
 
     fn test_ffmpeg_encoder(codec: &str) -> bool {
-        // Run a tiny test encode to verify hardware support on current GPU drivers
+        let mut args = vec!["-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.1"];
+        if codec == "h264_vaapi" {
+            args.extend(vec!["-vaapi_device", "/dev/dri/renderD128", "-vf", "format=nv12,hwupload"]);
+        }
+        args.extend(vec!["-c:v", codec, "-f", "null", "-"]);
+
         let status = Command::new("ffmpeg")
-            .args(&[
-                "-y",
-                "-f", "lavfi",
-                "-i", "color=c=black:s=64x64:d=0.1",
-                "-c:v", codec,
-                "-f", "null",
-                "-",
-            ])
-            .output();
+            .args(&args)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
 
         match status {
-            Ok(out) => out.status.success(),
+            Ok(s) => s.success(),
             Err(_) => false,
         }
     }
