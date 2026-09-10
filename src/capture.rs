@@ -81,7 +81,10 @@ impl CaptureEngine {
             let width = monitor.width();
             let height = monitor.height();
 
-            // Construct FFmpeg command with Hardware Auto-Detection args
+            let target_fps = hw_profile.target_capture_fps();
+            let target_fps_str = target_fps.to_string();
+
+            // Construct FFmpeg command with Hardware Auto-Detection args & dynamic FPS pacing
             let mut ffmpeg_args = vec![
                 "-y".to_string(),
                 "-thread_queue_size".to_string(), "512".to_string(),
@@ -90,7 +93,7 @@ impl CaptureEngine {
                 "-vcodec".to_string(), "rawvideo".to_string(),
                 "-s".to_string(), format!("{}x{}", width, height),
                 "-pix_fmt".to_string(), "rgba".to_string(),
-                "-r".to_string(), "30".to_string(),
+                "-r".to_string(), target_fps_str.clone(),
                 "-i".to_string(), "-".to_string(),
             ];
 
@@ -102,7 +105,7 @@ impl CaptureEngine {
             ffmpeg_args.push("yuv420p".to_string());
             ffmpeg_args.push(temp_video_clone.to_str().unwrap().to_string());
 
-            println!("[CaptureEngine] Spawning FFmpeg with args: {:?}", ffmpeg_args);
+            println!("[CaptureEngine] Spawning FFmpeg with args (target input FPS: {}): {:?}", target_fps, ffmpeg_args);
 
             let mut ffmpeg_child = match Command::new("ffmpeg")
                 .args(&ffmpeg_args)
@@ -119,7 +122,7 @@ impl CaptureEngine {
                             "-y", "-thread_queue_size", "512", "-fflags", "+genpts",
                             "-f", "rawvideo", "-vcodec", "rawvideo",
                             "-s", &format!("{}x{}", width, height),
-                            "-pix_fmt", "rgba", "-r", "30", "-i", "-",
+                            "-pix_fmt", "rgba", "-r", &target_fps_str, "-i", "-",
                             "-fps_mode", "cfr",
                             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                             "-pix_fmt", "yuv420p", temp_video_clone.to_str().unwrap()
@@ -139,7 +142,7 @@ impl CaptureEngine {
                 }
             };
 
-            let frame_duration = Duration::from_nanos(1_000_000_000 / 30);
+            let frame_duration = Duration::from_nanos(1_000_000_000 / target_fps as u64);
             let recording_start = std::time::Instant::now();
             let mut frame_count: u64 = 0;
 

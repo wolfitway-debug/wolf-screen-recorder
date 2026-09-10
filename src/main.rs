@@ -74,13 +74,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         sync_i18n_ui(&ui, &i18n_lock);
     }
 
-    // Initialize Hardware Auto-Detection Engine
+    // Initialize Hardware Auto-Detection Engine & Display Session Tearing Mitigation
     let hw_profile = HardwareProfile::detect();
     ui.set_hw_encoder_tag(hw_profile.encoder.tag().into());
 
     let initial_status = {
         let i = i18n.lock().unwrap();
-        format!("{} ({})", i.t("status_ready"), hw_profile.encoder.display_name())
+        format!(
+            "{} ({}) | Display: {}",
+            i.t("status_ready"),
+            hw_profile.encoder.display_name(),
+            hw_profile.display_summary()
+        )
     };
     ui.set_status_message(initial_status.into());
 

@@ -42,6 +42,23 @@ impl HwEncoder {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DisplaySessionType {
+    X11,
+    Wayland,
+    Unknown,
+}
+
+impl DisplaySessionType {
+    pub fn display_name(&self) -> &'static str {
+        match self {
+            DisplaySessionType::X11 => "X11",
+            DisplaySessionType::Wayland => "Wayland",
+            DisplaySessionType::Unknown => "Unknown",
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub struct HardwareProfile {
@@ -52,6 +69,9 @@ pub struct HardwareProfile {
     pub recommended_threads: usize,
     pub frame_buffer_capacity: usize,
     pub preset: &'static str,
+    pub session_type: DisplaySessionType,
+    pub monitor_refresh_rate: u32,
+    pub tearing_mitigation_active: bool,
 }
 
 impl HardwareProfile {
@@ -64,6 +84,9 @@ impl HardwareProfile {
         let available_memory_mb = sys.available_memory() / (1024 * 1024);
 
         let encoder = Self::detect_best_encoder();
+        let session_type = Self::detect_session_type();
+        let monitor_refresh_rate = Self::detect_monitor_refresh_rate();
+        let tearing_mitigation_active = Self::check_and_apply_tearing_fix(session_type, encoder);
         
         // Dynamic resource allocation based on cores & memory
         let recommended_threads = match cpu_cores {
@@ -106,18 +129,115 @@ impl HardwareProfile {
             recommended_threads,
             frame_buffer_capacity,
             preset,
+            session_type,
+            monitor_refresh_rate,
+            tearing_mitigation_active,
         };
 
         println!(
-            "[HardwareEngine] Detected {} Cores, {} MB RAM (Available: {} MB). Selected Encoder: {} {}",
+            "[HardwareEngine] Detected {} Cores, {} MB RAM (Available: {} MB). Selected Encoder: {} {}. Display: {}",
             profile.cpu_cores,
             profile.total_memory_mb,
             profile.available_memory_mb,
             profile.encoder.display_name(),
-            profile.encoder.tag()
+            profile.encoder.tag(),
+            profile.display_summary()
         );
 
         profile
+    }
+
+    pub fn target_capture_fps(&self) -> u32 {
+        if self.monitor_refresh_rate >= 60 {
+            60
+        } else if self.monitor_refresh_rate > 0 {
+            self.monitor_refresh_rate
+        } else {
+            60
+        }
+    }
+
+    pub fn display_summary(&self) -> String {
+        format!(
+            "{} @ {}Hz ({})",
+            self.session_type.display_name(),
+            self.monitor_refresh_rate,
+            if self.tearing_mitigation_active { "TearFree Active" } else { "Standard Sync" }
+        )
+    }
+
+    fn detect_session_type() -> DisplaySessionType {
+        if let Ok(wayland_disp) = std::env::var("WAYLAND_DISPLAY") {
+            if !wayland_disp.is_empty() {
+                return DisplaySessionType::Wayland;
+            }
+        }
+        if let Ok(session_type) = std::env::var("XDG_SESSION_TYPE") {
+            if session_type.eq_ignore_ascii_case("wayland") {
+                return DisplaySessionType::Wayland;
+            } else if session_type.eq_ignore_ascii_case("x11") {
+                return DisplaySessionType::X11;
+            }
+        }
+        if std::env::var("DISPLAY").is_ok() {
+            return DisplaySessionType::X11;
+        }
+        DisplaySessionType::Unknown
+    }
+
+    fn detect_monitor_refresh_rate() -> u32 {
+        if cfg!(target_os = "linux") {
+            if let Ok(output) = Command::new("xrandr").output() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if line.contains('*') {
+                        for word in line.split_whitespace() {
+                            if word.contains('*') {
+                                let cleaned = word.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
+                                if let Ok(hz) = cleaned.parse::<f32>() {
+                                    let round_hz = hz.round() as u32;
+                                    if round_hz >= 24 && round_hz <= 360 {
+                                        return round_hz;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        60
+    }
+
+    fn check_and_apply_tearing_fix(session_type: DisplaySessionType, encoder: HwEncoder) -> bool {
+        if session_type == DisplaySessionType::Wayland {
+            return true; // Wayland compositors handle atomic double buffering
+        }
+
+        if encoder == HwEncoder::Nvenc || cfg!(target_os = "linux") {
+            if let Ok(output) = Command::new("nvidia-settings").arg("-q").arg("CurrentMetaMode").output() {
+                if output.status.success() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    if stdout.contains("ForceCompositionPipeline=On") || stdout.contains("ForceFullCompositionPipeline=On") {
+                        println!("[DisplayEngine] NVIDIA ForceCompositionPipeline is already ACTIVE.");
+                        return true;
+                    } else {
+                        println!("[DisplayEngine] NVIDIA detected without ForceCompositionPipeline. Attempting auto-tune...");
+                        let status = Command::new("nvidia-settings")
+                            .arg("--assign")
+                            .arg("CurrentMetaMode=nvidia-auto-select +0+0 { ForceCompositionPipeline = On }")
+                            .status();
+                        if let Ok(s) = status {
+                            if s.success() {
+                                println!("[DisplayEngine] Successfully enabled NVIDIA ForceCompositionPipeline auto-mitigation.");
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
     }
 
     fn detect_best_encoder() -> HwEncoder {
