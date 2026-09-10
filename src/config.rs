@@ -17,11 +17,27 @@ pub struct AppConfig {
     pub cinematic_zoom: bool,
     pub paddle_checkout_url: String,
 
+    // Hardware & App Audio Selection
+    #[serde(default = "default_mic")]
+    pub selected_mic_device: String,
+    #[serde(default = "default_webcam")]
+    pub selected_webcam_device: String,
+    #[serde(default)]
+    pub excluded_audio_apps: Vec<String>,
+
     // Customizable Global Shortcuts
     pub hotkey_toggle_record: String,
     pub hotkey_snapshot: String,
     pub hotkey_region_select: String,
     pub hotkey_cancel: String,
+}
+
+fn default_mic() -> String {
+    "Default".to_string()
+}
+
+fn default_webcam() -> String {
+    "Auto (/dev/video0)".to_string()
 }
 
 impl Default for AppConfig {
@@ -45,6 +61,10 @@ impl Default for AppConfig {
             auto_watermark: true,
             cinematic_zoom: true,
             paddle_checkout_url: "https://buy.paddle.com/placeholder-wolfitway".to_string(),
+
+            selected_mic_device: "Default".to_string(),
+            selected_webcam_device: "Auto (/dev/video0)".to_string(),
+            excluded_audio_apps: Vec::new(),
 
             // Default Global Shortcuts
             hotkey_toggle_record: "Super+Shift+R".to_string(),

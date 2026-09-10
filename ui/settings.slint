@@ -21,6 +21,14 @@ export component SettingsModal inherits Rectangle {
     in-out property <bool> cinematic-zoom: true;
     in-out property <bool> show-lang-dropdown: false;
 
+    // Devices & App Muting Properties
+    in-out property <[string]> mic-device-list: ["Default"];
+    in-out property <string> selected-mic-device: "Default";
+    in-out property <[string]> webcam-device-list: ["Auto (/dev/video0)"];
+    in-out property <string> selected-webcam-device: "Auto (/dev/video0)";
+    in-out property <[string]> audio-apps-list: ["Discord", "Spotify", "Browser Stream"];
+    in-out property <string> excluded-app: "";
+
     // Customizable Hotkey Properties
     in-out property <string> hotkey-record: "Super+Shift+R";
     in-out property <string> hotkey-snapshot: "Super+Shift+S";
@@ -180,6 +188,25 @@ export component SettingsModal inherits Rectangle {
                             }
                         }
                         t_brand_t := TouchArea { clicked => { root.active-tab = "branding"; } }
+                    }
+
+                    // Tab 6: Devices & Audio Muting
+                    t_dev := Rectangle {
+                        height: 38px;
+                        background: root.active-tab == "devices" ? #22d45e : (t_dev_t.has-hover ? #161e2e : transparent);
+                        border-radius: 8px;
+                        animate background { duration: 100ms; }
+
+                        HorizontalLayout {
+                            padding-left: 12px; padding-right: 12px; alignment: center;
+                            Text {
+                                text: "🎙️ Devices & Mute";
+                                font-size: 10px; font-weight: 800;
+                                color: root.active-tab == "devices" ? #000000 : #f8fafc;
+                                vertical-alignment: center;
+                            }
+                        }
+                        t_dev_t := TouchArea { clicked => { root.active-tab = "devices"; } }
                     }
                 }
             }
@@ -539,6 +566,74 @@ export component SettingsModal inherits Rectangle {
                                 LineEdit {
                                     text: root.watermark-text;
                                     edited(t) => { root.watermark-text = t; }
+                                }
+                            }
+                        }
+                    }
+
+                    // Tab 6: Devices & Audio Muting
+                    if (root.active-tab == "devices") : VerticalLayout {
+                        spacing: 12px;
+
+                        Text { text: "AUDIO & WEBCAM INPUT DEVICES"; font-size: 9px; font-weight: 900; color: #38bdf8; }
+
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text { text: "Microphone Input:"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                            Rectangle {
+                                width: 260px; height: 32px;
+                                background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                LineEdit {
+                                    text: root.selected-mic-device;
+                                    edited(t) => { root.selected-mic-device = t; }
+                                }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text { text: "Webcam Input Device:"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                            Rectangle {
+                                width: 260px; height: 32px;
+                                background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                LineEdit {
+                                    text: root.selected-webcam-device;
+                                    edited(t) => { root.selected-webcam-device = t; }
+                                }
+                            }
+                        }
+
+                        Rectangle { height: 1px; background: #1e293b; }
+
+                        Text { text: "EXCLUDE APPLICATION AUDIO (PER-APP MUTE)"; font-size: 9px; font-weight: 900; color: #38bdf8; }
+
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text { text: "Mute App (e.g. Discord, Spotify):"; font-size: 10px; font-weight: 700; color: #f8fafc; vertical-alignment: center; }
+                            Rectangle {
+                                width: 260px; height: 32px;
+                                background: #161e2e; border-radius: 6px; border-width: 1px; border-color: #334155;
+                                LineEdit {
+                                    text: root.excluded-app;
+                                    placeholder-text: "Type app name to mute...";
+                                    edited(t) => { root.excluded-app = t; }
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            height: 36px;
+                            background: #161e2e;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: #334155;
+                            HorizontalLayout {
+                                padding-left: 10px; padding-right: 10px; alignment: center;
+                                Text {
+                                    text: root.excluded-app == "" ? "No application muted from desktop audio recording." : "Muting audio stream from: " + root.excluded-app;
+                                    font-size: 9px; font-weight: 700;
+                                    color: root.excluded-app == "" ? #94a3b8 : #f59e0b;
+                                    vertical-alignment: center;
                                 }
                             }
                         }

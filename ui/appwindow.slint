@@ -5,8 +5,8 @@ export { RegionSelectorWindow } from "region_selector.slint";
 export { WebcamPipWindow } from "webcam_pip.slint";
 
 export component AppWindow inherits Window {
-    width: root.show-settings-modal ? 740px : (root.show-editor-modal ? 920px : (root.show-window-picker ? 640px : (root.show-video-saved-modal ? 560px : (root.is-recording ? 270px : 860px))));
-    height: root.show-settings-modal ? 460px : (root.show-editor-modal ? 620px : (root.show-window-picker ? 420px : (root.show-video-saved-modal ? 240px : 64px)));
+    width: root.show-settings-modal ? 740px : (root.show-editor-modal ? 920px : (root.show-window-picker ? 640px : (root.show-video-saved-modal ? 560px : (root.is-processing ? 480px : (root.is-recording ? 270px : 860px)))));
+    height: root.show-settings-modal ? 460px : (root.show-editor-modal ? 620px : (root.show-window-picker ? 420px : (root.show-video-saved-modal ? 240px : (root.is-processing ? 160px : 64px))));
     no-frame: true;
     background: transparent;
     always-on-top: true;
@@ -14,6 +14,7 @@ export component AppWindow inherits Window {
     // Core Properties
     in-out property <string> primary-mode: "image";
     in-out property <bool> is-recording: false;
+    in-out property <bool> is-processing: false;
     in-out property <string> selected-mode: "desktop";
     in-out property <string> resolution: "1080p";
     in-out property <bool> audio-enabled: true;
@@ -57,6 +58,14 @@ export component AppWindow inherits Window {
     in-out property <string> watermark-position: "BottomRight";
     in-out property <bool> watermark-enabled: true;
     in-out property <bool> cinematic-zoom-enabled: true;
+
+    // Devices & App Audio Muting
+    in-out property <[string]> mic-device-list: ["Default"];
+    in-out property <string> selected-mic-device: "Default";
+    in-out property <[string]> webcam-device-list: ["Auto (/dev/video0)"];
+    in-out property <string> selected-webcam-device: "Auto (/dev/video0)";
+    in-out property <[string]> audio-apps-list: ["Discord", "Spotify", "Browser Stream"];
+    in-out property <string> excluded-app: "";
 
     // Customizable Hotkey Properties
     in-out property <string> hotkey-record: "Super+Shift+R";
@@ -123,7 +132,7 @@ export component AppWindow inherits Window {
         }
 
         // ── VIEW 1: MINIMAL SINGLE-ROW TOOLBAR ────────────────────────────────
-        if (!root.show-settings-modal && !root.show-editor-modal && !root.show-window-picker && !root.show-video-saved-modal) : HorizontalLayout {
+        if (!root.show-settings-modal && !root.show-editor-modal && !root.show-window-picker && !root.show-video-saved-modal && !root.is-processing) : HorizontalLayout {
             width: 100%;
             height: 100%;
             padding-left: 16px;
@@ -533,6 +542,12 @@ export component AppWindow inherits Window {
             watermark-position <=> root.watermark-position;
             auto-watermark <=> root.watermark-enabled;
             cinematic-zoom <=> root.cinematic-zoom-enabled;
+            mic-device-list: root.mic-device-list;
+            selected-mic-device <=> root.selected-mic-device;
+            webcam-device-list: root.webcam-device-list;
+            selected-webcam-device <=> root.selected-webcam-device;
+            audio-apps-list: root.audio-apps-list;
+            excluded-app <=> root.excluded-app;
             hotkey-record: root.hotkey-record;
             hotkey-snapshot: root.hotkey-snapshot;
             hotkey-region: root.hotkey-region;
@@ -699,6 +714,58 @@ export component AppWindow inherits Window {
                                 root.open-video-folder(root.saved-video-path);
                                 root.show-video-saved-modal = false;
                             }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ── VIEW 6: RECORDING PROCESSING & FINALIZING MODAL ──────────────────
+        if (root.is-processing) : Rectangle {
+            width: 100%;
+            height: 100%;
+            background: #080c14;
+            border-radius: 16px;
+
+            VerticalLayout {
+                padding: 20px;
+                spacing: 12px;
+                alignment: center;
+
+                HorizontalLayout {
+                    spacing: 12px;
+                    alignment: center;
+
+                    Rectangle {
+                        width: 38px; height: 38px;
+                        background: #0f1623;
+                        border-radius: 10px;
+                        border-width: 1.5px;
+                        border-color: #38bdf8;
+
+                        Text {
+                            text: "⏳";
+                            font-size: 18px;
+                            x: (parent.width - self.width)/2;
+                            y: (parent.height - self.height)/2;
+                        }
+                    }
+
+                    VerticalLayout {
+                        spacing: 2px;
+                        alignment: center;
+
+                        Text {
+                            text: "Processing & Finalizing Video...";
+                            font-size: 14px;
+                            font-weight: 900;
+                            color: #38bdf8;
+                        }
+
+                        Text {
+                            text: "Encoding audio/video tracks and applying watermark...";
+                            font-size: 10px;
+                            color: #94a3b8;
                         }
                     }
                 }

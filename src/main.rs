@@ -69,6 +69,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_hotkey_region(cfg.hotkey_region_select.as_str().into());
         ui.set_hotkey_cancel(cfg.hotkey_cancel.as_str().into());
 
+        // Device & Audio Muting Setup
+        let mic_devs = audio::AudioEngine::list_input_devices();
+        let webcam_devs = webcam::WebcamEngine::list_video_devices();
+        let audio_apps = audio::AudioEngine::list_active_audio_apps();
+
+        let slint_mic_devs: Vec<slint::SharedString> = mic_devs.iter().map(|s| s.as_str().into()).collect();
+        let slint_webcam_devs: Vec<slint::SharedString> = webcam_devs.iter().map(|s| s.as_str().into()).collect();
+        let slint_audio_apps: Vec<slint::SharedString> = audio_apps.iter().map(|s| s.as_str().into()).collect();
+
+        ui.set_mic_device_list(std::rc::Rc::new(slint::VecModel::from(slint_mic_devs)).into());
+        ui.set_webcam_device_list(std::rc::Rc::new(slint::VecModel::from(slint_webcam_devs)).into());
+        ui.set_audio_apps_list(std::rc::Rc::new(slint::VecModel::from(slint_audio_apps)).into());
+
+        ui.set_selected_mic_device(cfg.selected_mic_device.as_str().into());
+        ui.set_selected_webcam_device(cfg.selected_webcam_device.as_str().into());
+        if let Some(first_excluded) = cfg.excluded_audio_apps.first() {
+            ui.set_excluded_app(first_excluded.as_str().into());
+        }
+
         let mut i18n_lock = i18n.lock().unwrap();
         i18n_lock.set_language(&cfg.language);
         sync_i18n_ui(&ui, &i18n_lock);
@@ -323,6 +342,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         cfg.hotkey_snapshot = ui.get_hotkey_snapshot().as_str().to_string();
         cfg.hotkey_region_select = ui.get_hotkey_region().as_str().to_string();
         cfg.hotkey_cancel = ui.get_hotkey_cancel().as_str().to_string();
+        cfg.selected_mic_device = ui.get_selected_mic_device().as_str().to_string();
+        cfg.selected_webcam_device = ui.get_selected_webcam_device().as_str().to_string();
+        let excluded = ui.get_excluded_app().as_str().to_string();
+        cfg.excluded_audio_apps = if excluded.is_empty() { vec![] } else { vec![excluded] };
         cfg.save();
     });
 
@@ -598,8 +621,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let audio_enabled = ui.get_audio_enabled();
             audio_flag_clone.store(audio_enabled, Ordering::Relaxed);
 
+            let selected_mic = {
+                let cfg = config_rec_clone.lock().unwrap();
+                cfg.selected_mic_device.clone()
+            };
+
             let mic_audio_result = if audio_enabled {
-                match audio::AudioEngine::start_microphone_recording(flag_clone.clone()) {
+                match audio::AudioEngine::start_microphone_recording(flag_clone.clone(), &selected_mic) {
                     Ok(path) => {
                         println!("[Main] Microphone recording started: {:?}", path);
                         Some(path)
@@ -835,15 +863,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 let msg = i18n_sub.lock().unwrap().t("status_complete");
                                 ui.set_status_message(msg.into());
                                 ui.set_saved_video_path(final_path_str.into());
+                                ui.set_is_processing(false);
                                 ui.set_show_video_saved_modal(true);
                                 ui.set_recording_timer("00:00".into());
                             }
                         });
                     }
-                    _ => eprintln!("[CaptureEngine] FFmpeg post-process muxing failed."),
+                    _ => {
+                        eprintln!("[CaptureEngine] FFmpeg post-process muxing failed.");
+                        let ui_weak = ui_handle_thread.clone();
+                        let _ = slint::invoke_from_event_loop(move || {
+                            if let Some(ui) = ui_weak.upgrade() {
+                                ui.set_is_processing(false);
+                            }
+                        });
+                    }
                 }
             });
         } else {
+            ui.set_is_processing(true);
             let status_msg = i18n_clone.lock().unwrap().t("status_muxing");
             ui.set_status_message(status_msg.into());
         }
@@ -917,6 +955,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let webcam_flag = Arc::new(AtomicBool::new(false));
     let webcam_flag_clone = webcam_flag.clone();
     let pip_win_clone = active_pip_window.clone();
+    let config_webcam_clone = config.clone();
     let ui_handle = ui.as_weak();
     ui.on_toggle_webcam(move || {
         let ui = ui_handle.unwrap();
@@ -925,9 +964,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ui.set_webcam_enabled(next);
         webcam_flag_clone.store(next, Ordering::Relaxed);
 
+        let selected_webcam = {
+            let cfg = config_webcam_clone.lock().unwrap();
+            cfg.selected_webcam_device.clone()
+        };
+
         if next {
             if let Ok(pip_win) = WebcamPipWindow::new() {
-                webcam::WebcamEngine::start_feed(webcam_flag_clone.clone(), pip_win.as_weak());
+                webcam::WebcamEngine::start_feed(webcam_flag_clone.clone(), pip_win.as_weak(), &selected_webcam);
 
                 let pip_weak = pip_win.as_weak();
                 pip_win.on_move_window(move |delta_x, delta_y| {

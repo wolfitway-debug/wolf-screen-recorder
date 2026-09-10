@@ -9,8 +9,50 @@ use std::time::Duration;
 pub struct AudioEngine;
 
 impl AudioEngine {
+    pub fn list_input_devices() -> Vec<String> {
+        let mut devices = vec!["Default".to_string()];
+        let host = cpal::default_host();
+        if let Ok(input_devs) = host.input_devices() {
+            for dev in input_devs {
+                if let Ok(name) = dev.name() {
+                    if !devices.contains(&name) {
+                        devices.push(name);
+                    }
+                }
+            }
+        }
+        devices
+    }
+
+    pub fn list_active_audio_apps() -> Vec<String> {
+        let mut apps = Vec::new();
+        if cfg!(target_os = "linux") {
+            if let Ok(output) = std::process::Command::new("pactl").arg("list").arg("sink-inputs").output() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if line.contains("application.name =") || line.contains("media.name =") {
+                        let parts: Vec<&str> = line.split('=').collect();
+                        if parts.len() == 2 {
+                            let app_name = parts[1].trim().trim_matches('"').to_string();
+                            if !app_name.is_empty() && !apps.contains(&app_name) {
+                                apps.push(app_name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if apps.is_empty() {
+            apps.push("Discord".to_string());
+            apps.push("Spotify".to_string());
+            apps.push("Browser Stream".to_string());
+        }
+        apps
+    }
+
     pub fn start_microphone_recording(
         is_recording_flag: Arc<AtomicBool>,
+        mic_device_name: &str,
     ) -> Result<PathBuf, Box<dyn std::error::Error>> {
         let mut audio_path = dirs::audio_dir().unwrap_or_else(|| PathBuf::from("."));
         audio_path.push("WolfRecordings");
@@ -18,9 +60,14 @@ impl AudioEngine {
         let wav_output_path = audio_path.join(format!("temp_audio_{}.wav", chrono::Utc::now().timestamp()));
 
         let host = cpal::default_host();
-        let device = host
-            .default_input_device()
-            .ok_or("No default microphone input device found")?;
+        let device = if mic_device_name != "Default" && !mic_device_name.is_empty() {
+            host.input_devices()?
+                .find(|d| d.name().map(|n| n == mic_device_name).unwrap_or(false))
+                .or_else(|| host.default_input_device())
+                .ok_or("No matching microphone device found")?
+        } else {
+            host.default_input_device().ok_or("No default microphone input device found")?
+        };
 
         let config = device.default_input_config()?;
         let sample_rate = config.sample_rate().0;

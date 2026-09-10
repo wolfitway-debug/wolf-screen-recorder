@@ -7,26 +7,47 @@ use std::io::Read;
 pub struct WebcamEngine;
 
 impl WebcamEngine {
+    pub fn list_video_devices() -> Vec<String> {
+        let mut devices = Vec::new();
+        if cfg!(target_os = "linux") {
+            for i in 0..8 {
+                let dev_path = format!("/dev/video{}", i);
+                if std::path::Path::new(&dev_path).exists() {
+                    devices.push(format!("Camera {} ({})", i, dev_path));
+                }
+            }
+        }
+        if devices.is_empty() {
+            devices.push("Auto (/dev/video0)".to_string());
+        }
+        devices
+    }
+
     pub fn start_feed(
         enabled_flag: Arc<AtomicBool>,
         pip_window: slint::Weak<crate::WebcamPipWindow>,
+        selected_device: &str,
     ) {
+        let selected_device_str = selected_device.to_string();
         thread::spawn(move || {
-            println!("[WebcamEngine] Initializing hardware camera stream...");
+            println!("[WebcamEngine] Initializing hardware camera stream for: {}", selected_device_str);
 
             let dev_args = if cfg!(target_os = "macos") {
                 vec!["-f".to_string(), "avfoundation".to_string(), "-i".to_string(), "0".to_string()]
             } else if cfg!(target_os = "windows") {
                 vec!["-f".to_string(), "dshow".to_string(), "-i".to_string(), "video=Integrated Camera".to_string()]
             } else {
-                let dev_path = if std::path::Path::new("/dev/video0").exists() {
-                    "/dev/video0"
+                let dev_path = if selected_device_str.contains("/dev/video") {
+                    let idx = selected_device_str.find("/dev/video").unwrap();
+                    selected_device_str[idx..].trim_end_matches(')').to_string()
+                } else if std::path::Path::new("/dev/video0").exists() {
+                    "/dev/video0".to_string()
                 } else if std::path::Path::new("/dev/video1").exists() {
-                    "/dev/video1"
+                    "/dev/video1".to_string()
                 } else {
-                    "/dev/video0"
+                    "/dev/video0".to_string()
                 };
-                vec!["-f".to_string(), "v4l2".to_string(), "-i".to_string(), dev_path.to_string()]
+                vec!["-f".to_string(), "v4l2".to_string(), "-i".to_string(), dev_path]
             };
 
             let width = 320u32;
