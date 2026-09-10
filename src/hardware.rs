@@ -148,13 +148,7 @@ impl HardwareProfile {
     }
 
     pub fn target_capture_fps(&self) -> u32 {
-        if self.monitor_refresh_rate >= 60 {
-            60
-        } else if self.monitor_refresh_rate > 0 {
-            self.monitor_refresh_rate
-        } else {
-            60
-        }
+        30
     }
 
     pub fn display_summary(&self) -> String {
@@ -211,7 +205,7 @@ impl HardwareProfile {
 
     fn check_and_apply_tearing_fix(session_type: DisplaySessionType, encoder: HwEncoder) -> bool {
         if session_type == DisplaySessionType::Wayland {
-            return true; // Wayland compositors handle atomic double buffering
+            return true; // Wayland compositors handle atomic double buffering by default
         }
 
         if encoder == HwEncoder::Nvenc || cfg!(target_os = "linux") {
@@ -219,20 +213,10 @@ impl HardwareProfile {
                 if output.status.success() {
                     let stdout = String::from_utf8_lossy(&output.stdout);
                     if stdout.contains("ForceCompositionPipeline=On") || stdout.contains("ForceFullCompositionPipeline=On") {
-                        println!("[DisplayEngine] NVIDIA ForceCompositionPipeline is already ACTIVE.");
+                        println!("[DisplayEngine] NVIDIA ForceCompositionPipeline is ACTIVE.");
                         return true;
                     } else {
-                        println!("[DisplayEngine] NVIDIA detected without ForceCompositionPipeline. Attempting auto-tune...");
-                        let status = Command::new("nvidia-settings")
-                            .arg("--assign")
-                            .arg("CurrentMetaMode=nvidia-auto-select +0+0 { ForceCompositionPipeline = On }")
-                            .status();
-                        if let Ok(s) = status {
-                            if s.success() {
-                                println!("[DisplayEngine] Successfully enabled NVIDIA ForceCompositionPipeline auto-mitigation.");
-                                return true;
-                            }
-                        }
+                        println!("[DisplayEngine] NVIDIA graphics detected (Standard VSync). Note: Enable ForceCompositionPipeline in nvidia-settings UI if screen tearing occurs on X11.");
                     }
                 }
             }

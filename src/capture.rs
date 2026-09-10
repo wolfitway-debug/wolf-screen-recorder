@@ -142,11 +142,10 @@ impl CaptureEngine {
                 }
             };
 
-            let frame_duration = Duration::from_nanos(1_000_000_000 / target_fps as u64);
-            let recording_start = std::time::Instant::now();
-            let mut frame_count: u64 = 0;
+            let frame_duration = Duration::from_millis(33); // ~30 FPS wall-clock sync
 
             while is_recording_flag.load(Ordering::Relaxed) {
+                let frame_start = std::time::Instant::now();
                 if let Ok(image) = monitor.capture_image() {
                     let rgba_data = image.as_raw();
                     if let Err(e) = stdin.write_all(rgba_data) {
@@ -154,13 +153,11 @@ impl CaptureEngine {
                         break;
                     }
                     let _ = stdin.flush();
-                    frame_count += 1;
                 }
 
-                let target_time = recording_start + frame_duration * (frame_count as u32);
-                let now = std::time::Instant::now();
-                if target_time > now {
-                    thread::sleep(target_time - now);
+                let elapsed = frame_start.elapsed();
+                if frame_duration > elapsed {
+                    thread::sleep(frame_duration - elapsed);
                 }
             }
 
