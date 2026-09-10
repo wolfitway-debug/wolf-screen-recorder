@@ -78,24 +78,41 @@ impl CaptureEngine {
                 }
             };
 
-            let width = monitor.width();
-            let height = monitor.height();
+            let active_region = crate::region::get_active_region();
 
-            let target_fps = hw_profile.target_capture_fps();
-            let target_fps_str = target_fps.to_string();
+            let (width, height, offset_x, offset_y) = if let Some(r) = active_region {
+                (r.width, r.height, r.x, r.y)
+            } else {
+                (monitor.width(), monitor.height(), 0, 0)
+            };
 
-            // Construct FFmpeg command with Hardware Auto-Detection args & dynamic FPS pacing
+            let display_env = std::env::var("DISPLAY").unwrap_or_else(|_| ":0.0".to_string());
+            let use_x11grab = cfg!(target_os = "linux") && !display_env.is_empty();
+
             let mut ffmpeg_args = vec![
                 "-y".to_string(),
                 "-thread_queue_size".to_string(), "512".to_string(),
                 "-fflags".to_string(), "+genpts".to_string(),
-                "-f".to_string(), "rawvideo".to_string(),
-                "-vcodec".to_string(), "rawvideo".to_string(),
-                "-s".to_string(), format!("{}x{}", width, height),
-                "-pix_fmt".to_string(), "rgba".to_string(),
-                "-r".to_string(), target_fps_str.clone(),
-                "-i".to_string(), "-".to_string(),
             ];
+
+            if use_x11grab {
+                ffmpeg_args.extend(vec![
+                    "-f".to_string(), "x11grab".to_string(),
+                    "-draw_mouse".to_string(), "1".to_string(),
+                    "-framerate".to_string(), "30".to_string(),
+                    "-video_size".to_string(), format!("{}x{}", width, height),
+                    "-i".to_string(), format!("{}+{},{}", display_env, offset_x, offset_y),
+                ]);
+            } else {
+                ffmpeg_args.extend(vec![
+                    "-f".to_string(), "rawvideo".to_string(),
+                    "-vcodec".to_string(), "rawvideo".to_string(),
+                    "-s".to_string(), format!("{}x{}", width, height),
+                    "-pix_fmt".to_string(), "rgba".to_string(),
+                    "-r".to_string(), "30".to_string(),
+                    "-i".to_string(), "-".to_string(),
+                ]);
+            }
 
             // Add profile-specific encoder & acceleration flags
             ffmpeg_args.extend(hw_profile.get_ffmpeg_args());
@@ -105,7 +122,7 @@ impl CaptureEngine {
             ffmpeg_args.push("yuv420p".to_string());
             ffmpeg_args.push(temp_video_clone.to_str().unwrap().to_string());
 
-            println!("[CaptureEngine] Spawning FFmpeg with args (target input FPS: {}): {:?}", target_fps, ffmpeg_args);
+            println!("[CaptureEngine] Spawning FFmpeg (x11grab: {}): {:?}", use_x11grab, ffmpeg_args);
 
             let mut ffmpeg_child = match Command::new("ffmpeg")
                 .args(&ffmpeg_args)
@@ -116,13 +133,12 @@ impl CaptureEngine {
                 Ok(child) => child,
                 Err(e) => {
                     eprintln!("Failed to spawn ffmpeg hardware encoder: {}. Retrying with software fallback libx264...", e);
-                    // Fallback to libx264
                     Command::new("ffmpeg")
                         .args(&[
                             "-y", "-thread_queue_size", "512", "-fflags", "+genpts",
-                            "-f", "rawvideo", "-vcodec", "rawvideo",
-                            "-s", &format!("{}x{}", width, height),
-                            "-pix_fmt", "rgba", "-r", &target_fps_str, "-i", "-",
+                            "-f", "x11grab", "-draw_mouse", "1", "-framerate", "30",
+                            "-video_size", &format!("{}x{}", width, height),
+                            "-i", &format!("{}+{},{}", display_env, offset_x, offset_y),
                             "-fps_mode", "cfr",
                             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "23",
                             "-pix_fmt", "yuv420p", temp_video_clone.to_str().unwrap()
@@ -142,22 +158,32 @@ impl CaptureEngine {
                 }
             };
 
-            let frame_duration = Duration::from_millis(33); // ~30 FPS wall-clock sync
-
-            while is_recording_flag.load(Ordering::Relaxed) {
-                let frame_start = std::time::Instant::now();
-                if let Ok(image) = monitor.capture_image() {
-                    let rgba_data = image.as_raw();
-                    if let Err(e) = stdin.write_all(rgba_data) {
-                        eprintln!("Failed to write frame to ffmpeg stdin: {}", e);
-                        break;
-                    }
-                    let _ = stdin.flush();
+            if use_x11grab {
+                // FFmpeg x11grab manages capture directly at display server level.
+                // Loop until recording is stopped by user, then issue 'q' command to finalize stream.
+                while is_recording_flag.load(Ordering::Relaxed) {
+                    thread::sleep(Duration::from_millis(50));
                 }
+                let _ = stdin.write_all(b"q\n");
+                let _ = stdin.flush();
+            } else {
+                // Software fallback loop
+                let frame_duration = Duration::from_millis(33);
+                while is_recording_flag.load(Ordering::Relaxed) {
+                    let frame_start = std::time::Instant::now();
+                    if let Ok(image) = monitor.capture_image() {
+                        let rgba_data = image.as_raw();
+                        if let Err(e) = stdin.write_all(rgba_data) {
+                            eprintln!("Failed to write frame to ffmpeg stdin: {}", e);
+                            break;
+                        }
+                        let _ = stdin.flush();
+                    }
 
-                let elapsed = frame_start.elapsed();
-                if frame_duration > elapsed {
-                    thread::sleep(frame_duration - elapsed);
+                    let elapsed = frame_start.elapsed();
+                    if frame_duration > elapsed {
+                        thread::sleep(frame_duration - elapsed);
+                    }
                 }
             }
 

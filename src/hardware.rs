@@ -147,10 +147,6 @@ impl HardwareProfile {
         profile
     }
 
-    pub fn target_capture_fps(&self) -> u32 {
-        30
-    }
-
     pub fn display_summary(&self) -> String {
         format!(
             "{} @ {}Hz ({})",
