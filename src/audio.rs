@@ -141,7 +141,7 @@ impl AudioEngine {
             } else if cfg!(target_os = "windows") {
                 vec!["-f", "dshow", "-i", "audio=virtual-audio-capturer"]
             } else {
-                vec!["-f", "pulse", "-i", "default"]
+                vec!["-f", "pulse", "-i", "default.monitor"]
             };
 
             let mut ffmpeg_cmd = std::process::Command::new("ffmpeg");

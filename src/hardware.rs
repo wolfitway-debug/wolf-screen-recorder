@@ -252,7 +252,7 @@ impl HardwareProfile {
     }
 
     fn test_ffmpeg_encoder(codec: &str) -> bool {
-        let mut args = vec!["-y", "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.1"];
+        let mut args = vec!["-y", "-f", "lavfi", "-i", "color=c=black:s=1920x1080:d=0.1"];
         if codec == "h264_vaapi" {
             args.extend(vec!["-vaapi_device", "/dev/dri/renderD128", "-vf", "format=nv12,hwupload"]);
         }
